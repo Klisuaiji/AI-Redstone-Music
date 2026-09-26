@@ -1,0 +1,16 @@
+{
+ "meta": {"name": "demo", "namespace": "minecraft", "path": "music/demo", "song_id": 9,
+   "mc_version": "1.20.4", "style": "lemon", "time_unit": "nbs_ticks",
+   "tempo_tps": 10, "speed": 2, "auto_stop": true, "next_song": null, "mute_tag": "no_music"},
+ "tracks": [
+  {"name": "vocal_melody", "include": true, "instrument_default": "harp", "notes": [
+    {"t": 0, "midi": 66}, {"t": 4, "midi": 68}, {"t": 8, "midi": 69, "vol": 0.9}
+  ]},
+  {"name": "bass", "include": true, "instrument_default": "bass", "notes": [
+    {"t": 0, "midi": 42}, {"t": 8, "midi": 42}
+  ]},
+  {"name": "drums", "include": true, "instrument_default": "basedrum", "notes": [
+    {"t": 0, "midi": 54, "inst": "basedrum"}, {"t": 4, "midi": 54, "inst": "snare"}
+  ]}
+ ]
+}
