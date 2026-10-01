@@ -46,9 +46,9 @@ scoreboard players enable @a lrc
 scoreboard players enable @a play
 
 # --- Load message ---
-title @a title "Music datapack loaded successfully"
-title @a subtitle "Type /trigger menu to get the Redstone Music Box"
-tellraw @a ["",{"text":"[MusicBox] ","color":"gold","bold":true},{"text":"Music datapack loaded successfully","color":"white"},{"text":" (generic framework, no songs added yet)","color":"dark_gray"},{"text":"\n  /trigger menu","color":"yellow"},{"text":" get / take back the music box","color":"gray"},{"text":"\n  /trigger lrc","color":"yellow"},{"text":" toggle lyrics","color":"gray"},{"text":"\n  /trigger play set <number>","color":"yellow"},{"text":" request a song (or click a song name in the menu)","color":"gray"}]
+title @a title "已成功加载音乐数据包"
+title @a subtitle "输入 /trigger menu 获取红石音乐盒"
+tellraw @a ["",{"text":"[音乐盒] ","color":"gold","bold":true},{"text":"已成功加载音乐数据包","color":"white"},{"text":"（通用框架，尚未添加歌曲）","color":"dark_gray"},{"text":"\n  /trigger menu","color":"yellow"},{"text":" 获取 / 收回唱片机","color":"gray"},{"text":"\n  /trigger lrc","color":"yellow"},{"text":" 开关歌词","color":"gray"},{"text":"\n  /trigger play set <编号>","color":"yellow"},{"text":" 点歌（也可点菜单里的歌名）","color":"gray"}]
 
 # --- Song list (maintained by scripts/add_to_musicbox.py) ---
 function rmb:song/max

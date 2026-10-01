@@ -12,8 +12,16 @@ Songs are registered through `scripts/add_to_musicbox.py`, and playback reuses t
 ## Installation
 
 1. Drop `redstone-musicbox.zip` into the world's `datapacks/`
-2. `/reload` → "Music datapack loaded successfully" appears in the center of the screen
+2. `/reload` → "已成功加载音乐数据包" appears in the center of the screen
 3. `/trigger menu` to get the Redstone Music Box
+
+> **Language of the in-game text.** This repo is English (docs, comments, tool output), but every
+> string a **player** sees is **Chinese**: the load notice, the `[音乐盒]` chat prefix, the menu, the
+> pause/next/previous notices, the item name and the pack description. Code comments stay English, so
+> the framework is still easy to read and modify internationally. If you want a different in-game
+> language, edit the `tellraw` / `title` / `item_name` / `pack.mcmeta` description strings — that is
+> the complete set (38 lines), and `python3 scripts/check_refs.py examples/musicbox/datapack` will
+> confirm you did not break anything.
 
 ## Player usage
 
@@ -73,7 +81,7 @@ After adding, **you must `/reload`** (the files added are new function files). T
 
 ```
 data/rmb/function/song/max.mcfunction        song count (#max)
-data/rmb/function/song/name.mcfunction       "♪ Now playing: X" subtitle
+data/rmb/function/song/name.mcfunction       "♪ 正在播放：X" subtitle
 data/rmb/function/song/by_name.mcfunction    song name → id
 data/rmb/function/box/menu_list.mcfunction   clickable song menu
 ```

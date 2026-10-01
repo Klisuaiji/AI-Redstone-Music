@@ -15,4 +15,4 @@ scoreboard objectives remove mb_uct
 scoreboard objectives remove mb_udo
 scoreboard objectives remove mb_msg
 scoreboard objectives remove mb_cfg
-tellraw @a ["",{"text":"[MusicBox] ","color":"gold"},{"text":"Uninstalled (music_type / nbs_s / nbs_t used for song playback are kept so running songs are not affected)","color":"yellow"}]
+tellraw @a ["",{"text":"[音乐盒] ","color":"gold"},{"text":"已卸载（歌曲播放用的 music_type / nbs_s / nbs_t 保留，避免影响正在运行的歌曲）","color":"yellow"}]

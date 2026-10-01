@@ -6,7 +6,12 @@ description: >-
   Use when the user asks to "make redstone music", "turn this song into Minecraft music", "MIDI to
   mcfunction", "generate a note block music datapack", "play this song with commands", or for a
   "note block music datapack", "MIDI to Minecraft datapack", "convert a song into a Minecraft
-  datapack", "make a song that plays in vanilla MC". Covers 1.13 through 26.x (including the two
+  datapack", "make a song that plays in vanilla MC". Also matches the same request in other
+  languages — answer in the user's language, whatever it is. Examples: Chinese "做红石音乐" /
+  "把这首歌做成我的世界音乐" / "MIDI 转 mcfunction" / "生成音符盒音乐数据包" / "红石音乐盒",
+  Japanese "Minecraft で音符ブロック音楽を作る" / "MIDI をデータパックに変換",
+  Korean "마인크래프트 음악 데이터팩 만들기", Spanish "música de bloques de nota en Minecraft",
+  Russian "музыка из нотных блоков в Minecraft". Covers 1.13 through 26.x (including the two
   generations of pack.mcmeta syntax, the function/functions directory-naming boundary, and the
   /tick rate precision upgrade).
 ---
@@ -17,6 +22,10 @@ Turn a song into a datapack that plays in **vanilla Minecraft Java Edition** wit
 
 ## Rules
 
+0. **Language follows the user.** Ask questions, explain, report and deliver in whatever language the
+   user wrote in — the repo being English does not mean answering in English. Keep code, commands,
+   file paths and identifiers as they are. (Note the separate policy below: a datapack's *in-game*
+   text has its own language; the shipped music box uses Chinese.)
 1. Only **Minecraft Java Edition ≥ 1.13** is supported (datapacks only exist from 1.13). Bedrock has no `/function`: state that plainly and stop.
 2. Every instrument/sound ID must come from the `references/instruments.md` whitelist and must be available in the target version (pling/bit/banjo require 1.14+, trumpet requires 26.1+).
 3. **Never make up what you do not know**: if you cannot listen to the audio, say so and ask for MIDI / .nbs / a text score instead. With only an mp3, disclose the transcription quality gap honestly per `references/recipes.md` §8.
@@ -140,6 +149,10 @@ Self-check list (`validate_pack.py` covers all of it):
 - **Install into the Redstone Music Box**: `python3 scripts/add_to_musicbox.py --box <box dir> --song song.json --name "<song name>" [--lrc lyrics.lrc]`
   → `/reload`. The box provides the jukebox (left click = previous song / press-and-hold = pause / right click = next song / double right click = menu), `/trigger lrc` lyrics,
   `/trigger play set <id>` song selection, and per-dimension playback bans. See `examples/musicbox/README.md` for details.
+  **Language note:** the shipped box's *in-game* text is Chinese (it targets a Chinese-speaking player
+  base) while its code comments are English — do not "helpfully" translate the in-game strings unless
+  the user asks for a different in-game language. `add_to_musicbox.py` generates the Chinese text for
+  you; its console output and the generated comments stay English.
 - **lemon-compatible**: deliver the `<song name>/` folder (play/stop/tick/tree/notes) plus integration notes: put it into
   `data/<ns>/function/` (1.21+) or `functions/` (≤1.20.4); confirm the host runs this song's `tick` every tick,
   that `#speed nbs_s = 80`, and that `song_id` does not collide. **Do not** bring `pack.mcmeta` / `init` / `tags` into the host pack.

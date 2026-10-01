@@ -104,8 +104,9 @@ def regenerate_registry(box, songs):
 
     L = ["# Current song name subtitle —— generated automatically by scripts/add_to_musicbox.py"]
     for s in songs:
+        # in-game text is Chinese (see examples/musicbox/README.md); comments above stay English
         L.append('execute if score music_progress music_type matches %d run title @a actionbar %s'
-                 % (s["id"], json.dumps({"text": "♪ Now playing: " + s["name"]}, ensure_ascii=False)))
+                 % (s["id"], json.dumps({"text": "♪ 正在播放：" + s["name"]}, ensure_ascii=False)))
     L.append("scoreboard players set @a mb_msg 40")
     w(os.path.join(box, SONG_DIR, "name.mcfunction"), "\n".join(L), crlf=True)
 
@@ -117,19 +118,19 @@ def regenerate_registry(box, songs):
 
     L = ["# Song list —— generated automatically by scripts/add_to_musicbox.py, do not edit by hand"]
     if not songs:
-        L += ['tellraw @s ["",{"text":"[MusicBox] ","color":"gold"},{"text":"No songs have been added yet.","color":"yellow"}]',
-              'tellraw @s ["",{"text":"  Use ","color":"gray"},{"text":"python3 scripts/add_to_musicbox.py --box <datapack> --song song.json","color":"white"},{"text":" to register songs","color":"gray"}]',
-              'tellraw @s ["",{"text":"  Once registered, clickable song names will appear here.","color":"dark_gray"}]']
+        L += ['tellraw @s ["",{"text":"[音乐盒] ","color":"gold"},{"text":"还没有添加歌曲。","color":"yellow"}]',
+              'tellraw @s ["",{"text":"  用 ","color":"gray"},{"text":"python3 scripts/add_to_musicbox.py --box <数据包> --song song.json","color":"white"},{"text":" 注册歌曲","color":"gray"}]',
+              'tellraw @s ["",{"text":"  注册后这里会出现可点击的歌名。","color":"dark_gray"}]']
     for s in songs:
         L.append("tellraw @s " + json.dumps(["", {"text": "[%d] " % s["id"], "color": "gray"},
                                              {"text": s["name"], "color": "white",
                                               "clickEvent": {"action": "run_command",
                                                              "value": "/trigger play set %d" % s["id"]},
                                               "hoverEvent": {"action": "show_text",
-                                                             "value": "Click to play " + s["name"]}}],
+                                                             "value": "点击播放 " + s["name"]}}],
                                             ensure_ascii=False))
     if songs:
-        L.append('tellraw @s ["",{"text":"%d songs; you can also request one by name with /function rmb:play {song:\\"song name\\"}","color":"dark_gray"}]' % len(songs))
+        L.append('tellraw @s ["",{"text":"共 %d 首；也可 /function rmb:play {song:\\"歌名\\"} 按名字点歌","color":"dark_gray"}]' % len(songs))
     w(os.path.join(box, "data/rmb/function/box/menu_list.mcfunction"), "\n".join(L), crlf=True)
 
 

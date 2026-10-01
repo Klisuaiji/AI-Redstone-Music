@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: language policy — English repository, Chinese in-game text, answers in the user's language
+
+- **Repository stays English**: docs, code comments, tool console output and CLI help. That is what
+  makes the skill usable and modifiable outside Chinese-speaking communities.
+- **In-game text is Chinese again**: every string a player sees — the `tellraw` / `title` messages,
+  the `[音乐盒]` chat prefix, the enchanted item name and the `pack.mcmeta` description — was restored
+  in `examples/musicbox/datapack/` (38 lines, 23 files) and in what `scripts/add_to_musicbox.py`
+  generates. Code comments in those same files stay English, so the two layers are cleanly separated;
+  `scripts/check_refs.py` confirms nothing structural changed.
+- **The skill follows the user's language**: the frontmatter trigger text now also carries Chinese,
+  Japanese, Korean, Spanish and Russian phrasings, and `SKILL.md` requires answering in whatever
+  language the user wrote in.
+- `examples/musicbox/redstone-musicbox.zip` was rebuilt; `README.md`, `examples/musicbox/README.md`
+  and this file now quote the real (Chinese) in-game strings and document the policy.
+- Not changed: `make_datapack.py` still writes an English pack description by default — it is a
+  generic tool rather than this specific product; pass `--description` to override.
+
 ## Unreleased: repository translated to English
 
 The whole repository is now English so the skill is usable internationally. No behaviour changed:
@@ -35,7 +52,7 @@ byte-identical — only comments, documentation prose, tool output and in-game t
   - the menu is a clickable song-name list in chat; `/trigger play set <id>` or `/function rmb:play {song:"<song name>"}`
   - `/trigger lrc` toggles lyrics (action bar, switching line by line with the timeline, standard `.lrc` import supported)
   - per-dimension playback ban: `rmb:dim/ban|unban|status|clear|on|off`; `rmb:uninstall` removes everything in one step
-  - after `/reload` it shows "Music datapack loaded successfully"
+  - after `/reload` it shows "已成功加载音乐数据包" (all player-visible text is Chinese — see the entry at the top)
   - all scoreboards are abbreviations: `menu`/`lrc`/`play` + `mb_*`; `music_type`/`nbs_s`/`nbs_t` keep their original names for compatibility with generated songs
   - numbered dispatch is implemented with a **function macro**, so adding a song **does not** require changing any registration code
 - `scripts/add_to_musicbox.py`: registers a song.json (or a `.mid` directly) into the box, automatically maintaining the song count, the song-name subtitles,
