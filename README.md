@@ -21,7 +21,7 @@
 | 项目 | 范围 |
 |---|---|
 | 生成目标 | Minecraft Java 1.13+(`function/` vs `functions/` 目录、pack_format 自动对应) |
-| 最新验证版本 | 1.21.2–1.21.8、**26.2**(pack_format 57–107.1) |
+| 最新验证版本 | 1.21.2–1.21.8、**26.2**(数据包格式 57–107.1;≥1.21.9 的 `pack.mcmeta` 改用 `min_format`/`max_format` 数组写法) |
 | 不支持 | Bedrock 版 |
 
 ## 快速开始
@@ -39,6 +39,7 @@ AI 会依次确认:MC 版本 → 音源形式 → 声部取舍(人声/鼓/和声
 python3 scripts/generate.py song.json -o out/music/<歌名>
 python3 scripts/generate.py song.json -o out/ --speed 80   # lemon 兼容,宿主 #speed=80
 python3 scripts/nbs_to_json.py 文件.nbs -o song.json
+python3 scripts/validate_pack.py --pack out --namespace minecraft --song <歌名> --song-id 9 --speed 80  # 交付前自检
 ```
 
 ## 工作流(六步)
@@ -65,6 +66,21 @@ python3 scripts/nbs_to_json.py 文件.nbs -o song.json
 安装:zip 放入存档 `datapacks/` → `/reload` → `/function minecraft:music/fanwutuobang_demo/play`。
 详细说明见 [`examples/datapack_demo/README.md`](examples/datapack_demo/README.md)。
 
+## 示例数据包:m3(144 BPM MIDI 全曲 + 26.2)
+
+[`examples/datapack_m3/`](examples/datapack_m3/) 是一整首曲子的实战范例(165.8 秒 / 2897 个音符 /
+1169 个音符 tick / 树根 `0_4095`),源文件是 144 BPM 的四轨 MIDI(电吉他 / 鼓 / 贝斯):
+
+- 电吉他 MIDI ≥72(主旋律跨 72–92,21 个半音)→ `flute` vol 1.0(只有 flute 的 66–90 能一把覆盖,
+  pling/bit 只到 78,会把 80 以上的音全折八度)
+- 电吉他 MIDI ≤70(强力和弦)→ `guitar` vol 1.0;贝斯 → `bass` vol 1.0(最低 MIDI 27 低于音符盒下限
+  F#1=30,只能升八度);鼓 → basedrum 0.6 / snare 0.5 / hat 0.25
+
+同时演示两件事:**26.2 的 `pack.mcmeta` 写法**(`min_format`/`max_format` = `[107,1]`,不能写小数)、
+以及**时轴换算**(MIDI 144 BPM 按 20 tps 量化,误差中位 16.3 ms / 最大 25 ms = 半个游戏 tick 的物理下限)。
+安装:zip 放入存档 `datapacks/` → `/reload` → `/function minecraft:music/m3/play`。
+详细说明见 [`examples/datapack_m3/README.md`](examples/datapack_m3/README.md)。
+
 ## 配套成品:红石音乐盒 v3
 
 [`examples/RedstoneMusicBox-v3.zip`](examples/RedstoneMusicBox-v3.zip) 是本 skill 工作流产出的**完整成品数据包**
@@ -82,14 +98,16 @@ references/
   format_spec.md             # lemon 数据包逆向规范 + song.json schema + 手工生成备忘
   instruments.md             # 乐器白名单(版本/音域)
   pitch.md                   # use-count ↔ /playsound pitch 换算表
-  datapack.md                # pack_format 对照表(至 26.2)、目录命名分水岭、运行时事实
-  midi_notes.md              # MIDI 实战解析与对齐经验(真实交付沉淀)
+  datapack.md                # pack_format 对照表(至 26.3)、两代 pack.mcmeta 写法、目录命名分水岭、运行时事实
+  midi_notes.md              # MIDI 实战解析与对齐经验 + 交付前一致性自检(真实交付沉淀)
 scripts/
   generate.py                # song.json → mcfunction(树/notes/play/stop/tick)
   nbs_to_json.py             # .nbs → song.json
+  validate_pack.py           # 交付前自检:tree↔notes 一致性 + 树状态机模拟 + 白名单/音域/CRLF/标签
 examples/
   song.example.json          # song.json 最小示例
   datapack_demo/             # 独立示例数据包(反乌托邦前 16.5s)+ 节选 song.json + 说明
+  datapack_m3/               # 完整一曲示例(165.8s / 2897 音符 / MC 26.2)+ 完整 song.json + 说明
   README.md                  # 示例文件说明
 ```
 

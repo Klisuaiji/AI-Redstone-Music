@@ -60,10 +60,13 @@ python3 scripts/generate.py song.json -o out/ --speed 2
 无代码环境：按 `references/format_spec.md` 附录的手工生成规则写文件（工作量大，务必逐条核对窗口公式）。
 
 自检清单：
-- tree/ 根名与 tick.mcfunction 调用一致；notes/ 时间集合与 tree 叶子一致
+- **每个 notes/<t>.mcfunction 必须被 tree 恰好引用 1 次**（叶子必须 1 格宽；2 格宽叶子会让相邻对
+  (2k,2k+1) 里第二个 tick 的文件没人调用 → 永久静音，见 format_spec.md §A）
+- tree/ 根名与 tick.mcfunction 调用一致；notes/ 时间集合与 tree 叶子一致；tree 节点全部从根可达
 - 每个 notes 文件非空、乐器在版本白名单、pitch 在 [0.5, 2.0]
 - play/stop/tick 的 song_id 正确；last tick 有 `function .../stop`
-- 独立模式：目录名、pack_format 按 datapack.md 对应版本；tick/load 标签路径正确
+- 独立模式：目录名按 datapack.md 分水岭、pack.mcmeta 按版本选写法（≥1.21.9 用 `min_format`/`max_format`）；tick/load 标签路径正确
+- 有 Python 环境时直接跑 `python3 scripts/validate_pack.py --pack <数据包根> --namespace <ns> --song <歌名> --song-id <id> --speed <值>`（含树状态机模拟：断言每个 tick 在「游戏 tick == t」时恰好触发一次）
 
 ## 第六步：交付
 - lemon 兼容：打包 `<path>/` 文件夹（play/stop/tick/tree/notes）为 zip，附集成说明：「放入 `data/<namespace>/function/`（1.21+）或 `data/<namespace>/functions/`（≤1.20.4），确认主数据包每刻执行本曲 tick、init 含 scoreboard 目标」。

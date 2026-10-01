@@ -80,7 +80,11 @@ def main():
         rng = [t for t in ntset if x <= t <= y]
         if not rng: return None
         name = "%d_%d" % (x, y)
-        if y - x <= 1:  # 叶子
+        # 叶子必须 1 格宽（y == x，详见 references/format_spec.md §A）。
+        # 若写成 y-x<=1，叶子只输出 rng[0]；而二分出的最深层叶子恒为对齐的 [2k,2k+1]，
+        # 于是相邻 tick 对 (2k,2k+1) 同时有音符时，2k+1 的 notes/<t>.mcfunction 会生成
+        # 却没有任何节点调用它 → 该音符永久静音（实测某曲 1169 个 notes 里 79 个不可达）。
+        if y == x:  # 叶子
             t = rng[0]; guard = "-1" if t == 0 else str(t-1)
             tree[name] = ("execute if score music_progress nbs_s matches %d..%d "
                           "if score music_progress nbs_t matches ..%s run function %s:%s/notes/%d"
