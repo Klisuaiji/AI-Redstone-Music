@@ -65,6 +65,14 @@ python3 scripts/nbs_to_json.py 文件.nbs -o song.json
 安装:zip 放入存档 `datapacks/` → `/reload` → `/function minecraft:music/fanwutuobang_demo/play`。
 详细说明见 [`examples/datapack_demo/README.md`](examples/datapack_demo/README.md)。
 
+## 配套成品:红石音乐盒 v3
+
+[`examples/RedstoneMusicBox-v3.zip`](examples/RedstoneMusicBox-v3.zip) 是本 skill 工作流产出的**完整成品数据包**
+(46,280 个文件,兼容 1.21.2–1.21.8 / 26.2):12 首曲目(含《反乌托邦》全曲——伴奏/鼓组完全同步 MIDI、
+人声 pling 主旋律、LRC 歌词 49 句)+ 音乐盒播放器(附魔唱片机物品:左键上一首/长按暂停、右键下一首/
+双击菜单、丢弃自动补发、二次 `/trigger redstonemusic:menu` 收回)、歌词开关、维度禁播等子系统。
+安装:zip 放入 `datapacks/` → `/reload` → `/trigger redstonemusic:menu`。
+
 ## 仓库结构
 
 ```
