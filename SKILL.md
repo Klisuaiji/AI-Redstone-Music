@@ -1,438 +1,78 @@
 ---
 name: mc-redstone-music
-description: 将歌曲（音频/MIDI/MusicXML/NBS/文字谱面）分析、编曲并转换为可在原版 Minecraft Java 播放的红石音乐数据包或 mcfunction。适用于“做红石音乐”“把这首歌转成 Minecraft 音符盒音乐”“生成 NBS/红石音乐数据包”等任务。核心目标是：在 Minecraft 的音域、乐器、时序与宿主限制下，最大程度保持原曲的旋律、和声、低音、节奏与段落结构，同时优先保证实际听感。
+description: 将歌曲（音频/MIDI/NBS工程/文字谱面）转换为可在原版 Minecraft Java 播放的 mcfunction 红石音乐数据包。当用户要求"做红石音乐""把歌转成 mcfunction""生成音符盒音乐数据包"时使用。
 ---
 
-# Minecraft 红石音乐 AI Skill
-
-## 0. 核心目标
-
-你不是简单的“MIDI → mcfunction”转换器，而是**Minecraft 红石音乐编曲与交付代理**。
-
-最终评价标准按以下顺序：
-
-1. **音乐听感与可辨识度**：播放时应明显像原曲，而不是只追求数据逐项对应。
-2. **核心音乐信息保留**：主旋律 > 核心和声 > Bass > 核心节奏 > 副旋律 > 装饰音。
-3. **段落与编曲一致性**：重复出现的乐句/副歌应保持稳定的编曲逻辑。
-4. **Minecraft 兼容性**：乐器、音域、时间轴、数据包结构必须满足目标版本与宿主。
-5. **用户明确要求**：用户指定的保留/删除声部、风格、完整度、交付形式优先于默认策略。
-
-**不要为了“完全保留 MIDI”而制造明显难听的红石音乐。** 当机械还原与整体听感冲突时，允许对低优先级信息进行八度转移、简化、删减或重新编排，但不得随意破坏主旋律、核心和声、Bass 或核心节奏。
-
----
-
-## 1. 输入与上下文判断
-
-支持：
-- 音频
-- MIDI
-- MusicXML
-- NBS / OpenNBS 工程
-- 文字谱面、音名+节奏描述
-- 多源组合，例如“MIDI 伴奏 + 音频人声”
-
-### 1.1 不要机械地重复询问已经提供的信息
-
-先检查用户输入、附件、已有上下文。**只有缺少且会影响生成结果的参数才询问。**
-
-优先确认：
-
-1. **Minecraft Java 版本**：仅当无法从上下文确定时询问；Java < 1.13 不支持数据包工作流，Bedrock 不适用本 Skill。
-2. **音源形式**：若文件已提供，不再询问。
-3. **声部要求**：只有用户未说明且音源存在多个重要声部时询问；否则按默认策略分析并说明。
-4. **交付形式**：song.json / mcfunction 文件 / 完整数据包 zip；若环境支持直接生成文件，可根据用户要求交付。
-5. **宿主模式**：独立数据包或已有音乐宿主兼容模式。只有用户需要兼容现有宿主时询问宿主规范。
-6. **宿主参数**：例如 song_id、namespace/path、#speed 等仅在兼容模式下询问。
-
-如果用户只说“把这首歌做成红石音乐”，且文件已提供：
-- 不要一次抛出一大串问题；
-- 先识别能够自动确定的参数；
-- 只询问真正无法安全推断且会改变结果的参数；
-- 对合理默认值可以直接采用，并在交付说明中列出假设。
-
----
-
-## 2. 音源解析原则
-
-### 2.1 MIDI / MusicXML
-
-解析并建立统一的音乐中间信息：
-
-- BPM / tempo map
-- 拍号
-- 调号
-- 曲长
-- track / part
-- 轨道名称
-- note-on 时间
-- MIDI pitch
-- velocity
-- 音符密度
-- 同时发声数量
-- 重复乐句
-- 段落结构
-
-音符盒主要需要**起始时刻（onset）**，通常不需要 MIDI note-off 的持续时间。
-
-必须参考 `references/midi_notes.md` 处理真实 MIDI 的异常：
-- 同音高重叠不得因 note-on/off 配对逻辑而吞音；
-- 不要仅按 MIDI track 下标判断声部；优先读取轨道名称和实际音乐内容；
-- 正确处理 running status、variable-length quantity 等 MIDI 结构；
-- 对异常或损坏轨道尽量局部恢复，不要因为一处 note-off 异常直接丢弃整轨；
-- 曲长必须与可用参考音频或其他可信信息进行合理性检查。
-
-### 2.2 多源混合
-
-例如 MIDI 伴奏 + 音频人声时，必须先统一时间轴。
-
-参考 `references/midi_notes.md`：
-- 不要直接假设 MIDI 标称 BPM 与音频 BPM 相同；
-- 用可靠 onset / 人声基频 / 鼓点等建立对齐依据；
-- 若整体偏移只是检测误差，可忽略；若存在明显固定偏移，统一平移；
-- **禁止让不同来源各自使用独立时间轴后直接合并。**
-
-### 2.3 音频
-
-如果平台具备可靠的音频分析能力，可以进行旋律、节奏、BPM、鼓组等转录，但：
-- 不要声称已经“听到”无法访问的音频内容；
-- 音频转录应标注不确定性；
-- 复杂和弦、密集鼓组、环境声可能需要简化；
-- 若同时存在干净 MIDI，应优先用 MIDI 校正鼓点和明确音高，再用音频补足缺失声部。
-
----
-
-## 3. 音乐角色识别：不要按 Track 编号编曲
-
-这是编曲前的必经步骤。
-
-每个主要声部至少判断一个角色：
-
-- `melody`：主旋律 / 人声旋律
-- `counter_melody`：副旋律
-- `harmony`：和弦 / 长音和声
-- `arpeggio`：分解和弦
-- `bass`：低音
-- `drums`：鼓组
-- `percussion`：其他打击乐
-- `pad`：铺底
-- `fx`：效果音
-- `unknown`：无法可靠判断
-
-**不得因为“Track 1 看起来像主旋律”就直接指定为主旋律。**
-
-综合以下证据判断：
-- 轨道名称
-- 音域
-- 音符密度
-- 节奏独立性
-- 重复性
-- 与其他轨道的重合程度
-- 是否承担歌曲最容易哼唱/识别的旋律
-- 段落中是否持续出现
-
-若多个轨道可能是主旋律，优先选择音乐上最完整、最独立、最容易辨识的旋律线；必要时保留第二条作为副旋律，而不是简单删除。
-
----
-
-## 4. 曲式与重复段落分析
-
-在逐音符编曲前，先识别大致结构：
-
-`Intro / Verse / Pre-Chorus / Chorus / Bridge / Outro`
-
-如果无法可靠命名，则使用 `Section A/B/C...`。
-
-重点识别：
-- 重复出现的旋律
-- 重复出现的和声循环
-- 副歌重复
-- 前奏/间奏 riff
-- 鼓组进入与退出
-- Bass 模式变化
-
-### 重复段落一致性
-
-相同或高度相似的音乐段落，第一次确定编曲策略后应优先复用：
-- 乐器选择
-- 音量层级
-- 八度关系
-- 核心节奏
-- 主旋律处理方式
-
-除非原曲确实存在渐强、加层、变奏等编曲变化，否则不要让 AI 每次重新随机决定乐器。
-
----
-
-## 5. 编曲与信息保留优先级
-
-### 5.1 信息保留顺序
-
-当音域、同时发声数量、Minecraft 乐器限制或数据规模造成冲突时，按以下顺序保留：
-
-1. 主旋律
-2. 核心和声 / 和弦骨架
-3. Bass
-4. 核心节奏 / 鼓组骨架
-5. 副旋律
-6. 分解和弦 / Pad
-7. 装饰音、经过音、极端细节
-
-**低优先级信息可以牺牲，高优先级信息不得随意牺牲。**
-
-### 5.2 默认乐器映射
-
-严格以 `references/instruments.md` 为白名单，并根据目标 MC 版本过滤。
-
-默认方向：
-- 主旋律 / 人声旋律：`harp`、`pling`、`bit`；必要时 `flute` 补高八度
-- Bass：`bass`、`didgeridoo`
-- 和弦 / 分解：`guitar`、`banjo`
-- 鼓：`basedrum`、`snare`、`hat`
-- 高音点缀：`bell`、`chime`、`xylophone`、`iron_xylophone`、`cow_bell`
-- 铜管：仅目标版本存在时使用对应 `trumpet` 系列
-- 头颅类乐器：无音高概念，禁止承担旋律，仅用于特效
-
-这些只是**编曲起点，不是强制一对一映射**。最终应根据角色、音域、听感和版本可用性决定。
-
-### 5.3 版本回退
-
-目标版本不支持某音色时，优先寻找保持相同音乐角色的替代音色，而不是删除整个声部。
-
-默认回退：
-- `pling` → `harp`
-- `iron_xylophone` → `xylophone`
-- `bit` → `harp`
-- `banjo` → `guitar`
-- `cow_bell` → `bell`
-- `didgeridoo` → `bass`
-
-具体可用性必须以 `references/instruments.md` 为准。
-
----
-
-## 6. 音域处理
-
-每个音符按照目标乐器的基准音高换算 use-count，并确保最终 pitch 位于 `[0.5, 2.0]`，具体算法以 `references/pitch.md` 与生成脚本为准。
-
-超出范围时按以下顺序处理：
-
-1. 尝试使用更适合该音域的同角色乐器；
-2. 八度转移；
-3. 对低优先级极端音进行简化或删除；
-4. 必须保留时再采用可接受的近似方案，并在交付说明中记录。
-
-**不得为了满足音域而破坏主旋律的相对音程关系。**
-
-同一 tick、同一乐器的多音和弦必须保留；去重键必须包含 `(tick, instrument, pitch)`，禁止仅按 `(tick, instrument)` 去重。
-
-Minecraft 同时发声能力有限，遇到异常密集和弦时优先按第 5.1 节的音乐角色优先级进行压缩。
-
----
-
-## 7. 时间轴与节奏
-
-所有时间转换必须以 `references/format_spec.md` 的 schema 和宿主规则为准，**不要凭经验重新推导已经验证过的常数**。
-
-处理时必须：
-- 保持全曲统一时间单位；
-- 确保量化后的时间是生成器要求的整数；
-- 保留歌曲原始节奏关系；
-- 不因某一轨道的异常 BPM 而擅自改变全曲速度；
-- 多源输入必须先完成时间轴对齐再合并。
-
-不要因为“更容易生成”而擅自修改用户歌曲 BPM。
-
----
-
-## 8. 混音原则
-
-最终目标是**听感平衡**，而不是简单照搬 MIDI velocity。
-
-默认可从以下经验证值开始，再根据声部密度微调：
-
-| 声部 | 默认乐器 | 默认 vol |
-|---|---|---:|
-| 主旋律 | pling / harp | 1.0 |
-| 和声 | harp / guitar | 1.0 |
-| 点缀 | bit | 0.5 |
-| Bass | bass | 1.0 |
-| 底鼓 | basedrum | 0.6 |
-| 军鼓 | snare | 0.5 |
-| 踩镲 | hat | 0.25 |
-
-经验规则：**鼓宁小勿大。** 高频、密集的 hat 尤其容易覆盖旋律。
-
-当声部密度发生明显变化时，允许根据听感调整音量，但应保持同一音乐角色在不同段落中的相对一致性。
-
----
-
-## 9. 用户风格意图
-
-如果用户没有指定风格，默认采用 **Faithful / 原曲还原优先**：尽可能保留原曲结构、旋律、和声、Bass 与节奏。
-
-如果用户明确提出不同目标，应切换策略：
-
-- **还原原曲 / faithful**：最大程度保持原曲音乐信息。
-- **好听 / musicality**：允许更积极地简化、重配乐器和混音，以整体听感为优先。
-- **完整 / completeness**：尽量保留副旋律、和声与装饰音，只在技术限制下压缩。
-- **Minecraft 风格 / 8-bit**：允许主动利用音符盒音色进行风格化重编曲，但主旋律和歌曲结构仍应可辨识。
-
-如果用户同时提出冲突目标，例如“100%完整且绝对不超出音域”，应说明技术冲突，并按照音乐优先级给出最接近的可行方案，而不是静默破坏其中一项。
-
----
-
-## 10. 异常与失败恢复
-
-遇到异常时，**优先局部修复，不要轻易丢弃整首歌或整条轨道。**
-
-### 音域过宽
-→ 按角色寻找替代乐器 → 八度转移 → 压缩低优先级音符。
-
-### 同 tick 音符过多
-→ 保留主旋律、Bass、核心和声、核心节奏 → 删除低优先级装饰音。
-
-### MIDI note-off 缺失
-→ 以 note-on 为主要依据；不要因为“粘住音符”直接删除整轨。
-
-### Track 编号混乱
-→ 以轨道名称和实际音乐内容重新识别角色。
-
-### MIDI 与音频速度不一致
-→ 先进行 BPM / onset 对齐，禁止直接叠加两个时间轴。
-
-### 某乐器目标版本不可用
-→ 按角色进行音色回退，不删除整个声部。
-
-### 无法可靠识别某个声部
-→ 标记为 `unknown`，不要编造其具体乐器/旋律；在不影响主体音乐的情况下可暂时保留或忽略。
-
-### 无法访问音频
-→ 明确说明限制，并要求 MIDI/NBS/文字谱面等可解析输入；不得假装听辨。
-
----
-
-## 11. song.json：统一交付中间格式
-
-所有复杂输入最终应尽量归一到 `song.json`，再进入生成阶段。
-
-严格遵守 `references/format_spec.md` 的 schema。核心原则：
-- `meta` 保存版本、时间单位、宿主模式、song_id、namespace/path 等交付上下文；
-- 每个 `track` 对应一个音乐声部，而不是简单对应 MIDI track；
-- 每个 note 至少包含起始时间 `t`、音高 `midi`，可包含 `inst`、`vol`；
-- 人声主旋律应独立成 track，方便按用户要求 include/exclude；
-- 生成前必须先完成角色分析与编曲决策，不要直接把原始 MIDI track 原样塞入 JSON。
-
-`references/format_spec.md` 是 schema 的权威来源；如果本 Skill 与其细节冲突，以实际 schema / 已验证生成器行为为准。
-
----
-
-## 12. 生成与技术校验
-
+# Minecraft 红石音乐 mcfunction 工作流
+
+## 铁律
+1. 只支持 **Minecraft Java 版 ≥ 1.13**（数据包 1.13 才存在）。Bedrock 不支持，直接说明。
+2. 所有乐器/音效 ID 必须来自 `references/instruments.md` 的白名单，且满足目标版本。
+3. 不知道的事不许编：听不了音频就明说，改要 MIDI/NBS/文字谱面。
+
+## 第一步：必须向用户提问（缺一不可）
+1. **MC Java 版本**（如 1.20.4 / 1.21.4 / 26.1）——决定可用乐器、目录名（`functions` vs `function`）、pack_format。
+2. **音源形式**：直接上传音频？MIDI / MusicXML / OpenNBS 工程（.nbs 或文本转储）？还是文字谱面/哼唱描述？
+3. **是否包含演唱旋律轨**（主旋律，如 lemon 中 harp+guitar 承担的人声旋律）？是否保留鼓组/和声/低音轨？可逐轨 include/exclude。
+4. **交付物**：① song.json ② mcfunction 文件夹 ③ 完整可安装数据包 zip。可多选。
+5. **集成方式**：A.「lemon 兼容」——用户已有音乐数据包（提供 scoreboard 骨架：`music_type`/`nbs_s`/`nbs_t` 目标、`#speed` 假玩家、`no_music` 静音标签、每刻调用各曲 `tick`），只交付歌曲文件夹；B.「独立数据包」——自带 init/tick 标签。
+6. 若是 lemon 兼容模式：问 **song_id**（整数，其数据包内已占用的编号，lemon=8）和 **namespace/path**（lemon 是 `minecraft:music/lemon`）；问其数据包里 `#speed nbs_s` 的值（在 init 里 `scoreboard players set #speed nbs_s N`，常见为 2）。
+
+## 第二步：获取并分析音源
+按优先级：
+- **平台支持音频输入**：实际听辨，转录为「音名 + 相对节奏」。必须标注置信度，复杂和弦/鼓组可简化。人声只取旋律线。
+- **MIDI / MusicXML**：直接解析音轨（track）、音符（音高/起始/时长/力度）、速度（BPM）。
+  真实 MIDI 常见坑（同音高重叠、format 0 多轨、轨道名路由、粘住音符、BPM 与音频不符）见 `references/midi_notes.md`；
+  **多源混合（MIDI 伴奏 + 音频人声）时必须先做 BPM 对齐验证**（midi_notes.md 第 3 节），再统一时间轴。
+- **.nbs 二进制工程**：运行 `python3 scripts/nbs_to_json.py 文件.nbs -o song.json`（见 references/format_spec.md 的字段说明）。
+- **文字描述**（如"F# 小调，副歌从 C#5 开始…"）：手工构建 JSON，节奏需与用户确认。
+
+分析要点：确定调号、拍号、BPM、曲式（主歌/副歌）、各声部分工。鼓组只映射为 basedrum(底鼓)/snare(军鼓)/hat(踩镲)。
+
+## 第三步：编曲（音源声部 → 音符盒乐器）
+对照 `references/instruments.md` 选乐器，原则：
+- 主旋律（含人声旋律）：`harp`（中音温暖）、`pling`（明亮电钢，1.14+）、`bit`（合成，1.14+）、`flute`（高八度补充）
+- 低音：`bass`（弦贝斯）、`didgeridoo`（1.14+，低两八度）
+- 和弦/分解：`guitar`（低八度）、`banjo`（1.14+）
+- 鼓：`basedrum`/`snare`/`hat`（鼓声部 pitch 随意，用 use-count 12 → pitch 1.0 即可）
+- 高音点缀：`bell`/`chime`/`xylophone`/`iron_xylophone`(1.14+)/`cow_bell`(1.14+)
+- 铜管：仅 26.1+ 用 `trumpet` 系列
+- 头颅乐器（1.20+）**没有音高概念**，禁止用于旋律，仅作特效
+
+版本兜底：目标 1.13 时，1.14 音色全部回退（pling→harp、iron_xylophone→xylophone、bit→harp、banjo→guitar、cow_bell→bell、didgeridoo→bass）。
+
+默认混音音量（经用户听感校准，详见 midi_notes.md 第 6 节）：人声主旋律/伴奏 harp·guitar 1.0、bass 1.0、bit 0.5、底鼓 0.6、军鼓 0.5、踩镲 0.25。**鼓宁小勿大**——密集踩镲用 0.5 就会淹没全曲（用户最常见返工原因）。同一 tick 同一乐器的多音和弦必须保留，去重只按 (tick, 乐器, pitch)。
+
+音域：每个音符按乐器基准换算 use-count ∈ [0,24]（见 pitch.md）。超出时优先换八度合适的乐器，仍超则升/降八度并记录到交付说明。注意 MC 同时发声上限 255，密集和弦要控制同 tick 音符数（lemon 峰值约 4，很安全）。
+
+## 第四步：写出 song.json
+严格按 `references/format_spec.md` 的 schema。`meta.mc_version` 填用户版本；`time_unit` 默认 `nbs_ticks` + `tempo_tps`（BPM÷60×4 分音符？不——NBS 的 tps = 每秒钟的 NBS tick 数，4/4 拍 120BPM 常见为 10 tps）。
+
+## 第五步：生成与校验
 有代码执行环境时：
-
 ```bash
 python3 scripts/generate.py song.json -o out/music/<歌名>
+# lemon 兼容模式且用户提供 #speed 值时：
+python3 scripts/generate.py song.json -o out/ --speed 2
 ```
 
-lemon 兼容模式且宿主明确提供 `#speed` 时：
+脚本会自动：校验乐器白名单与版本、音域夹取并告警、时间量化校验（非整数报错）、生成 play/stop/tick/tree/notes（CRLF、末 tick 接 stop、单音符叶子树——与 lemon 参考包逐文件比对过的算法）。
+无代码环境：按 `references/format_spec.md` 附录的手工生成规则写文件（工作量大，务必逐条核对窗口公式）。
 
-```bash
-python3 scripts/generate.py song.json -o out/ --speed <宿主speed>
-```
+自检清单：
+- tree/ 根名与 tick.mcfunction 调用一致；notes/ 时间集合与 tree 叶子一致
+- 每个 notes 文件非空、乐器在版本白名单、pitch 在 [0.5, 2.0]
+- play/stop/tick 的 song_id 正确；last tick 有 `function .../stop`
+- 独立模式：目录名、pack_format 按 datapack.md 对应版本；tick/load 标签路径正确
 
-生成前后检查：
+## 第六步：交付
+- lemon 兼容：打包 `<path>/` 文件夹（play/stop/tick/tree/notes）为 zip，附集成说明：「放入 `data/<namespace>/function/`（1.21+）或 `data/<namespace>/functions/`（≤1.20.4），确认主数据包每刻执行本曲 tick、init 含 scoreboard 目标」。
+- 独立模式：交付完整数据包（含 pack.mcmeta、init、tags），安装：丢进 `datapacks/` → `/reload` → `/function <ns>:music/<歌名>/play`。
+- 附上 song.json 与「编曲决策说明」（转调、删减、乐器回退、#speed 假设）。
+- **宿主包 `#speed nbs_s` 必须 = 80 时 note tick 才等于游戏 tick**（树窗口 80×t 与之配套）；换宿主先问 #speed（见 midi_notes.md 第 7 节）。
 
-- 乐器是否属于目标版本白名单；
-- pitch 是否位于 `[0.5, 2.0]`；
-- 时间量化是否合法；
-- `tree/` 与 `notes/` 的时间集合是否一致；
-- notes 文件是否为空；
-- play / stop / tick 的 song_id 是否正确；
-- 最后一个音乐 tick 是否正确结束；
-- 独立模式的数据包目录、pack_format、load/tick 标签是否正确；
-- lemon/宿主模式的 scoreboard、路径、song_id、#speed 是否与宿主一致。
+## 参考产物
+`examples/RedstoneMusicBox-v2.zip`：完整可安装示例数据包「红石音乐盒 v2」（11 首歌 + 音乐盒播放器/歌词/维度禁播子系统，
+兼容 1.21.2-1.21.8 / 26.2）。生成的产物格式（notes/tree/play/stop/tick、`#speed nbs_s 80`）拿它对照即可，不必逐文件猜；
+其 `music/box/` 子系统是「在宿主包上做播放器 UI」的现成参考。
 
-无代码环境时，可依据 `references/format_spec.md` 的手工规则生成，但必须逐条核对，不得自行猜测树窗口公式。
-
----
-
-## 13. AI 音乐自检：生成后再检查一次
-
-生成结果完成后，必须进行一次**音乐层面的自检**。这不是训练数据验证，也不需要 before/after 数据集。
-
-检查：
-
-1. 主旋律是否清晰可辨？
-2. 是否出现明显错误音、突兀八度跳跃或不自然的音域变化？
-3. Bass 是否过重或覆盖旋律？
-4. 鼓是否过响、过密？
-5. 重复段落的乐器和音量是否一致？
-6. 是否因为技术限制误删了核心和声或节奏？
-7. 是否存在大量对听感几乎没有贡献的装饰音？
-8. 是否出现同一音符重复播放、异常空段或时间错位？
-9. 是否符合用户指定的“还原 / 好听 / 完整 / 风格化”目标？
-
-发现问题时只修改有问题的局部，不要为了修一个音符重新随机编排整首歌。
-
----
-
-## 14. 宿主兼容模式
-
-### 独立数据包
-
-交付完整 datapack：
-- `pack.mcmeta`
-- load/tick tags
-- init
-- play/stop/tick/tree/notes
-
-安装说明：放入 `datapacks/` → `/reload` → `/function <namespace>:<path>/play`。
-
-### lemon / 自定义宿主兼容
-
-不要把 lemon 的具体路径、song_id、scoreboard、#speed 当成通用标准。
-
-先读取并适配宿主实际规范。当前已验证的 lemon 参考规则见：
-- `references/format_spec.md`
-- `references/midi_notes.md`
-
-必须确认：
-- song_id
-- namespace/path
-- 宿主每刻如何推进时间
-- `#speed` 的实际值
-- scoreboard objective 名称
-- 静音 tag
-- 下一首歌曲的接链方式
-
-**只有宿主明确采用对应规则时，才使用 lemon 的 `80×t` 树窗口和相关 scoreboard 约定。** 不得把 lemon 实现细节错误地推广到所有 Minecraft 数据包。
-
----
-
-## 15. 交付说明
-
-最终交付应尽量包含：
-
-1. 用户要求的文件/数据包；
-2. `song.json`（如果本次流程产生了中间格式）；
-3. 简短的编曲决策说明：
-   - 主旋律使用什么乐器；
-   - Bass / 和声 / 鼓如何处理；
-   - 哪些音符发生八度转移或简化；
-   - 是否发生版本音色回退；
-   - 宿主兼容模式使用了哪些假设。
-
-不要输出大量用户不需要的内部推理；只说明会影响使用、修改或复现结果的关键决策。
-
----
-
-## 16. 参考文件使用原则
-
-- `references/instruments.md`：乐器白名单、版本与音色信息的权威来源。
-- `references/pitch.md`：音高 / use-count / pitch 换算的权威来源。
-- `references/format_spec.md`：song.json 与已验证 mcfunction / tree 产物格式的权威来源。
-- `references/midi_notes.md`：真实 MIDI 解析、BPM 对齐、混音、宿主 speed 等实战规则。
-- `references/datapack.md`：目标 Minecraft 版本的数据包结构与兼容规则。
-- `examples/datapack_demo/`：实际可安装示例，用于理解最终交付形态。
-
-当 Skill 正文只需要说明“做什么”，具体常数、字段和实现细节优先放在 reference 文件中。这样 Skill 可以跨歌曲、跨宿主、跨版本复用，而不会把某一首歌或 lemon 的特殊情况误认为通用规则。
