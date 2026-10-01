@@ -52,20 +52,18 @@ python3 scripts/nbs_to_json.py 文件.nbs -o song.json
 
 详见 [SKILL.md](SKILL.md)。
 
-## 示例数据包:红石音乐盒 v2
+## 示例数据包:fanwutuobang_demo
 
-[`examples/RedstoneMusicBox-v2.zip`](examples/RedstoneMusicBox-v2.zip) 是一个**可直接安装的完整数据包**
-(42,543 个文件),既是示例也是可玩的成品:
+[`examples/datapack_demo/`](examples/datapack_demo/) 内有**可直接安装**的独立示例数据包:
+真实交付曲《反乌托邦》的前 16.5 秒(117 个音符 tick / 树根 0_511),包含三个典型声部,
+生成的产物格式(notes/tree/play/stop/tick)拿它对照即可,不必逐文件猜:
 
-- **兼容 1.21.2–1.21.8 / 26.2**(pack_format 57–107.1)
-- 11 首曲目:kagec3、sanyaose、touhoukami、lemon、After the Rain(雨停时分,含 43 句歌词)、
-  baka、badapple、lunatic、popcorn、UN、shanghaitea
-- 红石音乐盒播放器:附魔唱片机物品,左键上一首/长按暂停、右键下一首/双击点歌菜单,
-  丢弃自动补发;`/trigger menu` 领取,`/trigger lyc` 歌词开关,`/trigger song set 0-10` 点歌
-- 维度禁播(`/function minecraft:music/box/dim_ban` 等)与暂停/切歌原生联动播放链
+- **前奏钢琴 riff**(0–16.4s):MIDI acoustic guitar 轨 → `harp`/`guitar`,vol 1.0
+- **鼓组**(10.04s 进):MIDI drums 轨 → basedrum 0.6 / snare 0.5 / hat 0.25(GM:36→底鼓,38/40→军鼓,其余→踩镲)
+- **人声旋律**(16.49s 起):音频提取的 pling 主旋律,vol 1.0(人声独立轨)
 
-安装:zip 放入存档 `datapacks/` → `/reload` → 按提示 `/trigger menu` 领取唱片机。
-详细说明见 [`examples/README.md`](examples/README.md)。
+安装:zip 放入存档 `datapacks/` → `/reload` → `/function minecraft:music/fanwutuobang_demo/play`。
+详细说明见 [`examples/datapack_demo/README.md`](examples/datapack_demo/README.md)。
 
 ## 仓库结构
 
@@ -76,15 +74,15 @@ references/
   format_spec.md             # lemon 数据包逆向规范 + song.json schema + 手工生成备忘
   instruments.md             # 乐器白名单(版本/音域)
   pitch.md                   # use-count ↔ /playsound pitch 换算表
-  datapack.md                # pack_format 对照表、目录命名分水岭、运行时事实
+  datapack.md                # pack_format 对照表(至 26.2)、目录命名分水岭、运行时事实
   midi_notes.md              # MIDI 实战解析与对齐经验(真实交付沉淀)
 scripts/
   generate.py                # song.json → mcfunction(树/notes/play/stop/tick)
   nbs_to_json.py             # .nbs → song.json
 examples/
   song.example.json          # song.json 最小示例
-  RedstoneMusicBox-v2.zip    # 完整示例数据包(1.21.2-1.21.8 / 26.2)
-  README.md                  # 示例数据包说明
+  datapack_demo/             # 独立示例数据包(反乌托邦前 16.5s)+ 节选 song.json + 说明
+  README.md                  # 示例文件说明
 ```
 
 ## 时轴约定(重要)
