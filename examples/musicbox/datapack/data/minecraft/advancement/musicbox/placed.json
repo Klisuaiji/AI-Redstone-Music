@@ -1,0 +1,20 @@
+{
+  "criteria": {
+    "place": {
+      "trigger": "minecraft:placed_block",
+      "conditions": {
+        "item": {
+          "items": "minecraft:jukebox",
+          "components": {
+            "minecraft:custom_data": {
+              "musicbox": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "rewards": {
+    "function": "rmb:box/placed"
+  }
+}

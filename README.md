@@ -90,6 +90,32 @@ python3 tests/smoke_test.py            # 端到端回归测试，应输出 SMOKE
 
 详见 [`SKILL.md`](SKILL.md)。
 
+## 红石音乐盒（通用框架数据包）
+
+[`examples/musicbox/`](examples/musicbox/) 是一个**不含任何歌曲**的通用播放器盒子：丢进 `datapacks/`，
+用 `add_to_musicbox.py` 往里注册歌曲，就得到一个完整的音乐盒。
+
+| 需求 | 实现 |
+|---|---|
+| 获取 / 收回唱片机 | `/trigger menu`（附魔唱片机；**不可放置**、**不可丢弃**，丢了自动补发） |
+| 上一首 / 下一首 | 左键单击 / 右键单击 |
+| 暂停 · 播放 | 连击或长按左键 |
+| 点歌菜单 | 双击右键 → 聊天栏里可点击的歌名列表（也可 `/trigger play set <编号>`） |
+| 按歌名点歌 | `/function rmb:play {song:"歌名"}` |
+| 歌词 | `/trigger lrc` 开关，显示在动作栏，随音乐逐句切换（支持标准 `.lrc` 导入） |
+| 维度禁播 | `/function rmb:dim/ban`（站在要禁播的维度里执行一次），`status` / `unban` / `clear` / `on` / `off` |
+| 加载提示 | `/reload` 后屏幕显示「已成功加载音乐数据包」 |
+| 记分板 | 全部缩写：`menu` `lrc` `play` + `mb_*`（`music_type` / `nbs_s` / `nbs_t` 是歌曲播放约定，保持原名以兼容本 skill 生成的歌曲） |
+
+```bash
+cp -r examples/musicbox/datapack /tmp/box
+python3 scripts/add_to_musicbox.py --box /tmp/box --song 歌曲.mid --name "歌名" --lrc 歌词.lrc
+python3 scripts/check_refs.py /tmp/box      # 静态检查：函数引用 / JSON / 行尾
+```
+
+细节（记分板对照表、手动添加歌曲的契约、交互实现原理、已知限制）见
+[`examples/musicbox/README.md`](examples/musicbox/README.md)。需要 **MC 1.21.5+**，本包按 26.2 打包。
+
 ## 相关项目（另一条技术路线）
 
 [**Cohenjikan/McMusicMaker**](https://github.com/Cohenjikan/McMusicMaker) 做的是**实体音符盒机器**：
@@ -128,6 +154,8 @@ scripts/
   generate.py                  # song.json → mcfunction（树/notes/play/stop/tick）
   validate_pack.py             # 交付前自检（含树状态机模拟）
   make_datapack.py             # 组装独立数据包 + zip（两代 pack.mcmeta）
+  add_to_musicbox.py           # 把歌曲注册进红石音乐盒（曲目表 / 菜单 / 歌词）
+  check_refs.py                # 通用静态检查：函数引用 / JSON / CRLF
   render_preview.py            # song.json → WAV 试听
   doctor.py                    # 没声音排查向导
   midilib.py                   # 共用 MIDI 读取库
@@ -138,10 +166,9 @@ tests/
   smoke_test.py                # 端到端回归测试（含"2 格宽叶子静音"回归用例）
   gen_demo_midi.py             # 生成 examples/demo.mid
 examples/
+  musicbox/                    # 红石音乐盒：通用框架数据包 + zip + 说明（不含歌曲）
   demo.mid                     # 8 小节示例 MIDI
   song.example.json            # song.json 最小示例
-  datapack_m3/                 # 完整一曲示例（165.8s / 2897 音符 / MC 26.2）
-  datapack_demo/               # 最小示例包（反乌托邦前 16.5s）
   RedstoneMusicBox-v3.zip      # 配套成品：红石音乐盒 v3（12 首 + 播放器）
 ```
 

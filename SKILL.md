@@ -50,6 +50,8 @@ description: >-
 | `make_datapack.py` | 第六步：组装交付物 | song.json → 可安装数据包 + zip；**按目标版本自动选 pack.mcmeta 两代写法与目录名** |
 | `render_preview.py` | 交付前试听 | song.json → WAV（简单合成音色，不用开游戏） |
 | `doctor.py` | 出问题时 | "怎么没声音"逐项体检，每条 ✗ 下面给修法 |
+| `add_to_musicbox.py` | 要把歌装进红石音乐盒 | 注册/移除歌曲，自动维护曲目表、点歌菜单、歌名字幕；支持从 `.mid` 一步到位 + `.lrc` 歌词 |
+| `check_refs.py` | 改完数据包 | 通用静态检查：函数引用是否都能解析、JSON 合法性、CRLF |
 
 一条龙：
 
@@ -73,7 +75,9 @@ python3 scripts/validate_pack.py --pack out/<歌名> --namespace minecraft --son
 3. **声部取舍**：是否保留主旋律 / 鼓组 / 和声 / 低音？可逐轨 include/exclude。
 4. **交付物**：song.json / mcfunction 文件夹 / 完整可安装数据包 zip？可多选。
 5. **集成方式**：A. **lemon 兼容**——用户已有音乐数据包，只交付歌曲文件夹；
-   B. **独立数据包**——自带 init/tick 标签，丢进 `datapacks/` 就能用（`make_datapack.py` 负责）。
+   B. **独立数据包**——自带 init/tick 标签，丢进 `datapacks/` 就能用（`make_datapack.py` 负责）；
+   C. **装进红石音乐盒**——用户要"唱片机 + 点歌菜单 + 歌词 + 维度禁播"那套交互时，
+   用 `add_to_musicbox.py` 把歌注册进 `examples/musicbox/` 的框架（见「第六步」）。
 6. lemon 兼容模式追加问：**song_id**（宿主内未占用的编号，lemon 原包占 8）、**namespace/path**、
    宿主的 **`#speed nbs_s`** 值（`/scoreboard players get #speed nbs_s`）。**不是 80 就要重标时间轴。**
 
@@ -141,6 +145,9 @@ python3 scripts/validate_pack.py --pack out/<歌名> --namespace <ns> --song <�
 
 - **独立数据包**：`make_datapack.py` 产出的 zip 丢进 `datapacks/` → `/reload` →
   `/function <ns>:<path>/play`；给玩家打 `no_music` 标签即静音。
+- **装进红石音乐盒**：`python3 scripts/add_to_musicbox.py --box <盒子目录> --song song.json --name "歌名" [--lrc 歌词.lrc]`
+  → `/reload`。盒子提供唱片机（左键上一首 / 连击长按暂停 / 右键下一首 / 双击右键菜单）、`/trigger lrc` 歌词、
+  `/trigger play set <编号>` 点歌、维度禁播。详见 `examples/musicbox/README.md`。
 - **lemon 兼容**：交付 `<歌名>/` 文件夹（play/stop/tick/tree/notes）+ 集成说明：放进
   `data/<ns>/function/`（1.21+）或 `functions/`（≤1.20.4）；确认宿主每刻执行本曲 `tick`、
   `#speed nbs_s = 80`、`song_id` 不冲突。**不要**带 `pack.mcmeta` / `init` / `tags` 进宿主包。
@@ -171,13 +178,13 @@ python3 scripts/validate_pack.py --pack out/<歌名> --namespace <ns> --song <�
 | `references/troubleshooting.md` | 从"没声音"到"能听"的症状→原因→修法 |
 | `references/recipes.md` | 常用配方：接入 lemon 宿主、接歌链、多曲共存、**/tick rate 精度进阶**、/schedule 备选引擎 |
 | `templates/` | song.json 骨架 + 独立数据包骨架（手拼时用） |
-| `examples/datapack_m3/` | 完整一曲实战范例（165.8s / 2897 音符 / MC 26.2） |
-| `examples/datapack_demo/` | 最小示例包（反乌托邦前 16.5s） |
+| `examples/musicbox/` | **红石音乐盒通用框架**（不含歌曲）：唱片机 + 点歌菜单 + 歌词 + 维度禁播；用 `add_to_musicbox.py` 注册歌曲 |
 | `examples/demo.mid` | 8 小节示例 MIDI，用来快速验证工具链 |
 
 ## 参考产物与自检
 
-- `examples/datapack_m3/`：完整一曲（含完整 song.json、26.2 的 pack.mcmeta、时轴换算说明）。
-- `tests/smoke_test.py`：端到端回归测试（含"2 格宽叶子必须被抓出来"的回归用例）；
+- `examples/musicbox/`：**通用框架数据包**（不含歌曲），也可当"产物该长什么样"的对照；
+  它是从同作者的成品包 v3 抽出来的，交互机制一致。
+- `tests/smoke_test.py`：端到端回归测试（含"2 格宽叶子必须被抓出来"的回归用例，以及"把歌曲注册进音乐盒"的全流程）；
   `python3 tests/smoke_test.py` 应输出 `SMOKE TEST PASSED`。
 - 出问题先跑 `python3 scripts/doctor.py --pack <包>`。

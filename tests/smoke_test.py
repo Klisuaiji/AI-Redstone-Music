@@ -205,6 +205,45 @@ def main():
                              "--name", "demo", "--song-id", "8", "--tick-rate", "80"])
             check("--tick-rate 80 可用（网格 12.5ms）", code == 0 and "12.50 ms" in log, log.strip()[-200:])
 
+        # ---------- 6. 红石音乐盒：注册歌曲 → 静态检查 ----------
+        print("\n[6] 红石音乐盒（通用框架 + 注册歌曲）")
+        box_src = os.path.join(ROOT, "examples", "musicbox", "datapack")
+        if not os.path.isdir(box_src):
+            check("examples/musicbox/datapack 存在", False, "缺少音乐盒框架")
+        else:
+            code, log = run([PY, os.path.join(S, "check_refs.py"), box_src])
+            check("空盒子的函数引用全部可解析", code == 0, log.strip()[-200:])
+            box = os.path.join(tmp, "box")
+            shutil.copytree(box_src, box)
+            lrc = os.path.join(tmp, "t.lrc")
+            with open(lrc, "w", encoding="utf-8") as f:
+                f.write("[00:00.00]第一句\n[00:02.50]第二句\n")
+            code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
+                             "--song", mid, "--name", "Smoke Test Song", "--lrc", lrc])
+            check("add_to_musicbox.py 注册 MIDI + 歌词", code == 0, log.strip()[-200:])
+            code, log = run([PY, os.path.join(S, "check_refs.py"), box])
+            check("注册后引用仍全部可解析", code == 0, log.strip()[-200:])
+            mx = open(os.path.join(box, "data/rmb/function/song/max.mcfunction"), encoding="utf-8").read()
+            check("#max 被写成 1", "#max mb_cfg 1" in mx, mx.strip()[-120:])
+            songdir = os.path.join(box, "data/rmb/function/song/1")
+            check("歌曲四件套齐全（play/tick/stop/lrc）",
+                  all(os.path.isfile(os.path.join(songdir, f)) for f in
+                      ("play.mcfunction", "tick.mcfunction", "stop.mcfunction", "lrc.mcfunction")))
+            lrcf = open(os.path.join(songdir, "lrc.mcfunction"), encoding="utf-8").read()
+            check("歌词按 nbs_s 排好（2.5s → 50 tick → 4000）", "4000.." in lrcf, lrcf.strip()[-160:])
+            menu = open(os.path.join(box, "data/rmb/function/box/menu_list.mcfunction"), encoding="utf-8").read()
+            check("菜单里出现可点击的歌名", "/trigger play set 1" in menu and "Smoke Test Song" in menu)
+            code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
+                             "--song", mid, "--name", "Second"])
+            check("自动分配第二个编号", code == 0 and "[2]" in log, log.strip()[-160:])
+            code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box, "--remove", "1"])
+            check("可以移除曲目", code == 0, log.strip()[-160:])
+            code, log = run([PY, os.path.join(S, "check_refs.py"), box])
+            check("移除后引用仍全部可解析", code == 0, log.strip()[-200:])
+            code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
+                             "--song", mid, "--name", "dup", "--id", "2"])
+            check("编号冲突会被拒绝", code != 0)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     nfail = sum(1 for _, ok, _ in results if not ok)

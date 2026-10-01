@@ -1,0 +1,6 @@
+# /function rmb:play {song:"歌名"}  —— 按歌名点歌（宏，1.20.2+）
+$data modify storage rmb:io arg set value {song:"$(song)"}
+scoreboard players set #cur mb_cfg 0
+function rmb:song/by_name
+execute if score #cur mb_cfg matches 1.. run function rmb:song/play
+execute if score #cur mb_cfg matches 0 run title @s actionbar "没有找到这首歌；/trigger menu 打开菜单"

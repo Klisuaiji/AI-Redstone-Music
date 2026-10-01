@@ -1,6 +1,29 @@
 # 更新记录
 
-## 未发布（本次）
+## 未发布（红石音乐盒）
+
+### 新增：红石音乐盒通用框架数据包
+- `examples/musicbox/`：**不含任何歌曲**的通用播放器盒子（40 个文件 / 17 KB）+ 可安装 zip。
+  - `/trigger menu` 获取 / 收回**附魔唱片机**；不可放置（advancement 捕获后清掉方块）、
+    不可丢弃（掉地上的立即回收）、丢失自动补发
+  - 左键单击 = 上一首；连击 / 长按左键 = 暂停 · 播放；右键单击 = 下一首；双击右键 = 点歌菜单
+  - 菜单是聊天栏可点击的歌名列表；`/trigger play set <编号>` 或 `/function rmb:play {song:"歌名"}`
+  - `/trigger lrc` 开关歌词（动作栏，随时间轴逐句切换，支持标准 `.lrc` 导入）
+  - 维度禁播：`rmb:dim/ban|unban|status|clear|on|off`；`rmb:uninstall` 一键卸载
+  - `/reload` 后提示「已成功加载音乐数据包」
+  - 记分板全部缩写：`menu`/`lrc`/`play` + `mb_*`；`music_type`/`nbs_s`/`nbs_t` 保持原名以兼容生成的歌曲
+  - 按编号派发用**函数宏**实现，所以加歌**不需要**改任何注册代码
+- `scripts/add_to_musicbox.py`：把 song.json（或直接 `.mid`）注册进盒子，自动维护曲目数量、歌名字幕、
+  歌名→编号表、可点击菜单；支持 `--lrc` 歌词、`--list`、`--remove`、编号冲突保护
+- `scripts/check_refs.py`：通用静态检查（函数引用能否解析 / JSON 合法性 / CRLF），改完数据包跑一下
+- `tests/smoke_test.py`：新增"把 demo.mid 注册进音乐盒并校验"的全流程用例
+
+### 移除
+- `examples/datapack_demo/`（反乌托邦前 16.5s）与 `examples/datapack_m3/`（完整一曲）已删除：
+  仓库示例改为**不含歌曲的通用框架**。它们是修复前生成器的产物，行为仍正确但前者有 54 个音符早响 1 tick；
+  需要格式对照时按 `examples/README.md` 的命令现场生成即可。
+
+## 上一版（工具链）
 
 ### 修复
 - **`generate.py` 树叶子 bug（静音 + 早响）**：叶子条件原为 `b-a<=1`（2 格宽）却只输出 `rng[0]`。
@@ -9,7 +32,7 @@
      → 该音符永久静音（实测某曲 1169 个 notes 里 79 个不可达；上游成品包 `after_the_rain` 491 个、
      `fanwutuobang` 85 个）；
   2. 窗口从叶子左边界起算，落在右半边的音符**早响 1 个游戏 tick（50 ms）**
-     （实测 `examples/datapack_demo` 的 117 个 notes 里有 54 个早响）。
+     （实测上游示例包 `fanwutuobang_demo` 的 117 个 notes 里有 54 个早响）。
   改为 `y == x`（1 格宽）：窗口/守卫公式不变，时轴语义不变，树深 +1（该曲 2719 → 3888 节点）。
 - `validate_pack.py`：指向歌曲文件夹时不再错误地要求 `pack.mcmeta`。
 
