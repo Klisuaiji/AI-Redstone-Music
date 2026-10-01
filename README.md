@@ -127,17 +127,6 @@ For details (scoreboard cross-reference table, the contract for adding songs by 
 with the RedPiano mod + a sampled resource pack it actually builds note blocks/redstone machines in the world (shapes such as `inplace` / `swave` / `multilane`),
 depending on Fabric, `/tick rate 80` and a resource pack; the timbre is sampled piano (closer to the original song), but the footprint is large and it needs mods.
 
-|  | This project (datapack) | McMusicMaker (physical machines) |
-|---|---|---|
-| Dependencies | none (vanilla) | Fabric + RedPiano mod + sampled resource pack |
-| Sound | 16 note block timbres | sampled piano etc. (103 timbres) |
-| Footprint | 0 | grows with song length |
-| Playback | `/function .../play` | press a button after building the machine in the world |
-| Versions | 1.13+ | see its `docs/VERSION_TACTICS.md` |
-
-The two routes do not conflict: for "zero dependencies, play it anywhere" choose this project; for "physical machines + the original timbre" choose McMusicMaker.
-This project's `/tick rate` precision upgrade also drew on that route's quantization experience.
-
 ## Repository structure
 
 ```
