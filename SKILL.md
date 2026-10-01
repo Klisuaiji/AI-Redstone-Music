@@ -72,7 +72,6 @@ python3 scripts/generate.py song.json -o out/ --speed 2
 - **宿主包 `#speed nbs_s` 必须 = 80 时 note tick 才等于游戏 tick**（树窗口 80×t 与之配套）；换宿主先问 #speed（见 midi_notes.md 第 7 节）。
 
 ## 参考产物
-`examples/RedstoneMusicBox-v2.zip`：完整可安装示例数据包「红石音乐盒 v2」（11 首歌 + 音乐盒播放器/歌词/维度禁播子系统，
-兼容 1.21.2-1.21.8 / 26.2）。生成的产物格式（notes/tree/play/stop/tick、`#speed nbs_s 80`）拿它对照即可，不必逐文件猜；
-其 `music/box/` 子系统是「在宿主包上做播放器 UI」的现成参考。
+`examples/datapack_demo/`：可安装的独立示例数据包（真实交付曲《反乌托邦》前 16.5s，含前奏 riff/鼓/人声三声部）
++ 节选 song.json + README。生成的产物格式（notes/tree/play/stop/tick、`#speed nbs_s 80`）拿它对照即可，不必逐文件猜。
 
