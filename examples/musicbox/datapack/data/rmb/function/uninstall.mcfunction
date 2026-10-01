@@ -1,4 +1,4 @@
-# /function rmb:uninstall —— 彻底卸载（清物品、清实体、清记分板）
+# /function rmb:uninstall —— full uninstall (clear items, entities and scoreboards)
 kill @e[type=interaction,tag=mb_box]
 clear @a minecraft:jukebox[custom_data~{musicbox:1b}]
 scoreboard objectives remove menu
@@ -15,4 +15,4 @@ scoreboard objectives remove mb_uct
 scoreboard objectives remove mb_udo
 scoreboard objectives remove mb_msg
 scoreboard objectives remove mb_cfg
-tellraw @a ["",{"text":"[音乐盒] ","color":"gold"},{"text":"已卸载（歌曲播放用的 music_type / nbs_s / nbs_t 保留，避免影响正在运行的歌曲）","color":"yellow"}]
+tellraw @a ["",{"text":"[MusicBox] ","color":"gold"},{"text":"Uninstalled (music_type / nbs_s / nbs_t used for song playback are kept so running songs are not affected)","color":"yellow"}]

@@ -2,6 +2,6 @@
 	"pack": {
 		"min_format": [107, 1],
 		"max_format": [107, 1],
-		"description": "<歌名> 红石音乐"
+		"description": "<Song Name> redstone music"
 	}
 }

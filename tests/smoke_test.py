@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""端到端冒烟测试（纯标准库，可直接当 CI 用）：
+"""End-to-end smoke test (standard library only, can be used directly as CI):
 
     python3 tests/smoke_test.py
 
-覆盖：
-  1. song.json → generate.py → validate_pack.py 全绿，且每个 notes 文件都被 tree 引用恰好一次
-  2. **回归测试**：把 tree 改回上游那种 2 格宽叶子 → validate_pack.py 必须报错
-     （这是历史上"相邻 tick 的第二个音符永久静音"的 bug，必须一直有人看着它）
-  3. make_datapack.py：26.2 出 min_format/max_format，1.20.4 出 pack_format + functions/ 目录
-  4. pack.mcmeta 写法写错时 validate_pack.py 必须报错（26.2 只写 pack_format 是错的）
+Covers:
+  1. song.json → generate.py → validate_pack.py all green, and every notes file is referenced
+     exactly once by tree
+  2. **Regression test**: revert tree to the upstream 2-cell-wide leaves → validate_pack.py must
+     fail (this is the historical "the second note on adjacent ticks is silent forever" bug, and
+     someone must keep watching it)
+  3. make_datapack.py: 26.2 emits min_format/max_format, 1.20.4 emits pack_format + functions/ dir
+  4. when pack.mcmeta is written the wrong way validate_pack.py must fail (writing only
+     pack_format for 26.2 is wrong)
 """
 import json, os, re, shutil, subprocess, sys, uuid, zipfile
 
-try:            # 控制台是 GBK 时，非 GBK 字符降级为 ?，不要让测试自己崩在 print 上
+try:            # when the console is GBK, non-GBK characters degrade to ?, so the test must not crash on print
     sys.stdout.reconfigure(errors="replace")
 except Exception:
     pass
@@ -27,8 +30,8 @@ results = []
 
 
 def run(cmd):
-    # 子进程一律用 UTF-8 输出（否则 Windows 下按 GBK 写管道，回读会变成乱码），
-    # 这样断言里可以直接写中文。
+    # Subprocesses always use UTF-8 output (otherwise on Windows they write to the pipe as GBK and
+    # reading it back turns into mojibake), so assertions can rely on that text directly.
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
     return r.returncode, r.stdout.decode("utf-8", "replace")
@@ -40,7 +43,7 @@ def check(name, ok, detail=""):
 
 
 def make_song(path, name="demo", song_id=7):
-    """刻意让 0/1/2 三个 tick 都相邻 —— 上游 2 格宽叶子会在这里吃掉一个音符。"""
+    """Deliberately make ticks 0/1/2 all adjacent — upstream 2-cell-wide leaves eat one note here."""
     song = {"meta": {"name": name, "namespace": "minecraft", "path": "music/" + name,
                      "song_id": song_id, "mc_version": "26.2", "style": "standalone",
                      "time_unit": "nbs_s_units", "speed": 80, "auto_stop": True,
@@ -62,7 +65,7 @@ def make_song(path, name="demo", song_id=7):
 
 
 def tree_refs(song_dir):
-    """tree 里每个 notes/<t> 被引用了多少次。"""
+    """How many times each notes/<t> is referenced inside tree."""
     ref = {}
     tdir = os.path.join(song_dir, "tree")
     for fn in os.listdir(tdir):
@@ -74,44 +77,48 @@ def tree_refs(song_dir):
 
 
 def main():
-    # 默认在仓库目录下开临时工作区（有些沙箱环境不允许写系统 temp），跑完自动删除。
-    # 不用 tempfile.mkdtemp：它以 0700 建目录，在某些 Windows 沙箱里 ACL 会拦住后续写入。
+    # By default the temporary work area is created under the repo directory (some sandbox
+    # environments do not allow writing to the system temp) and it is removed automatically after
+    # the run. Do not use tempfile.mkdtemp: it creates the directory with 0700, and in some Windows
+    # sandboxes the ACL then blocks subsequent writes.
     base = os.environ.get("RSM_SMOKE_DIR") or ROOT
     tmp = os.path.join(base, ".rsm-smoke-" + uuid.uuid4().hex[:8])
     os.makedirs(tmp)
-    print("工作目录: %s\n" % tmp)
+    print("work dir: %s\n" % tmp)
     try:
         songp = os.path.join(tmp, "demo.song.json")
         make_song(songp)
         out = os.path.join(tmp, "out")
 
-        # ---------- 1. 生成 + 自检 ----------
+        # ---------- 1. generate + validate ----------
         print("[1] generate.py → validate_pack.py")
         code, log = run([PY, os.path.join(S, "generate.py"), songp, "-o", os.path.join(out, "music", "demo")])
-        check("generate.py 退出码 0", code == 0, log.strip()[-200:])
+        check("generate.py exit code 0", code == 0, log.strip()[-200:])
         song_dir = os.path.join(out, "music", "demo")
-        check("notes/ 与 tree/ 都生成了",
+        check("both notes/ and tree/ are generated",
               os.path.isdir(os.path.join(song_dir, "notes")) and os.path.isdir(os.path.join(song_dir, "tree")))
 
         notes = sorted(int(f[:-11]) for f in os.listdir(os.path.join(song_dir, "notes")))
         ref = tree_refs(song_dir)
         bad = [t for t in notes if ref.get(t, 0) != 1]
-        check("每个 notes 文件都被 tree 恰好引用 1 次（含相邻 tick 0/1/2）", not bad, "异常: %s" % bad)
+        check("every notes file is referenced exactly once by tree (including adjacent ticks 0/1/2)",
+              not bad, "unexpected: %s" % bad)
 
         code, log = run([PY, os.path.join(S, "validate_pack.py"), "--pack", out,
                          "--namespace", "minecraft", "--song", "demo", "--song-id", "7", "--speed", "80",
                          "--mc-version", "26.2"])
-        check("validate_pack.py 全绿", code == 0, log.strip()[-300:])
-        check("自检里跑到了树状态机模拟", "树状态机模拟" in log or "ALL CHECKS PASSED" in log)
+        check("validate_pack.py passes all checks", code == 0, log.strip()[-300:])
+        check("validation ran the tree state-machine simulation",
+              "state-machine" in log or "ALL CHECKS PASSED" in log)
 
-        # ---------- 2. 回归：2 格宽叶子必须被抓出来 ----------
-        print("\n[2] 回归测试：把 tree 改回 2 格宽叶子（历史上的静音 bug）")
+        # ---------- 2. regression: 2-cell-wide leaves must be caught ----------
+        print("\n[2] regression test: revert tree to 2-cell-wide leaves (the historical silent bug)")
         bug = os.path.join(tmp, "buggy")
         shutil.copytree(out, bug)
         bdir = os.path.join(bug, "music", "demo", "tree")
         for f in os.listdir(bdir):
             os.remove(os.path.join(bdir, f))
-        # 复刻上游算法：区间宽 2 且只发 rng[0]
+        # replicate the upstream algorithm: range width 2, and only rng[0] is fired
         open(os.path.join(bdir, "0_1.mcfunction"), "w", encoding="utf-8", newline="").write(
             "execute if score music_progress nbs_s matches 0..240 "
             "if score music_progress nbs_t matches ..-1 run function minecraft:music/demo/notes/0\r\n")
@@ -131,123 +138,123 @@ def main():
             "execute if score music_progress nbs_s matches 640..1840 run function minecraft:music/demo/tree/8_15\r\n")
         code, log = run([PY, os.path.join(S, "validate_pack.py"), "--pack", bug,
                          "--namespace", "minecraft", "--song", "demo", "--song-id", "7", "--speed", "80"])
-        check("2 格宽叶子被判定为 FAIL", code != 0)
-        check("报错点明了 notes/1 静音", "notes/1" in log or "静音" in log, log.strip()[-300:])
+        check("2-cell-wide leaves are judged FAIL", code != 0)
+        check("the error names notes/1 as silent", "notes/1" in log or "silent" in log, log.strip()[-300:])
 
-        # ---------- 3. make_datapack：两代 pack.mcmeta ----------
+        # ---------- 3. make_datapack: two generations of pack.mcmeta ----------
         print("\n[3] make_datapack.py")
         p26 = os.path.join(tmp, "pack26")
         code, log = run([PY, os.path.join(S, "make_datapack.py"), songp, "-o", p26, "--mc-version", "26.2"])
-        check("make_datapack.py(26.2) 退出码 0", code == 0, log.strip()[-300:])
+        check("make_datapack.py (26.2) exit code 0", code == 0, log.strip()[-300:])
         mc = json.load(open(os.path.join(p26, "pack.mcmeta"), encoding="utf-8"))["pack"]
-        check("26.2 用 min_format/max_format = [107,1]",
+        check("26.2 uses min_format/max_format = [107,1]",
               mc.get("min_format") == [107, 1] and mc.get("max_format") == [107, 1], str(mc))
-        check("26.2 不出现 pack_format/supported_formats",
+        check("26.2 has no pack_format/supported_formats",
               "pack_format" not in mc and "supported_formats" not in mc)
-        check("26.2 目录用 function/ 与 tags/function/",
+        check("26.2 uses function/ and tags/function/ directories",
               os.path.isdir(os.path.join(p26, "data", "minecraft", "function", "music", "demo")) and
               os.path.isfile(os.path.join(p26, "data", "minecraft", "tags", "function", "tick.json")))
         z = os.path.join(tmp, "pack26.zip")
-        check("生成了 zip 且 pack.mcmeta 在 zip 根目录",
+        check("a zip was produced and pack.mcmeta sits at the zip root",
               os.path.isfile(z) and "pack.mcmeta" in zipfile.ZipFile(z).namelist())
         code, log = run([PY, os.path.join(S, "validate_pack.py"), "--pack", p26, "--namespace", "minecraft",
                          "--song", "demo", "--song-id", "7", "--speed", "80", "--mc-version", "26.2"])
-        check("打出来的 26.2 数据包自检全绿", code == 0, log.strip()[-300:])
+        check("the built 26.2 datapack passes validation", code == 0, log.strip()[-300:])
 
         p120 = os.path.join(tmp, "pack1204")
         code, log = run([PY, os.path.join(S, "make_datapack.py"), songp, "-o", p120,
                          "--mc-version", "1.20.4", "--no-zip"])
         mc = json.load(open(os.path.join(p120, "pack.mcmeta"), encoding="utf-8"))["pack"]
-        check("1.20.4 用 pack_format = 26", mc.get("pack_format") == 26, str(mc))
-        check("1.20.4 目录用 functions/ 与 tags/functions/",
+        check("1.20.4 uses pack_format = 26", mc.get("pack_format") == 26, str(mc))
+        check("1.20.4 uses functions/ and tags/functions/ directories",
               os.path.isdir(os.path.join(p120, "data", "minecraft", "functions", "music", "demo")) and
               os.path.isfile(os.path.join(p120, "data", "minecraft", "tags", "functions", "tick.json")))
 
-        # ---------- 4. pack.mcmeta 写法写错必须报错 ----------
-        print("\n[4] pack.mcmeta 写法校验")
+        # ---------- 4. a wrongly written pack.mcmeta must be rejected ----------
+        print("\n[4] pack.mcmeta syntax validation")
         bad = os.path.join(tmp, "badmeta")
         shutil.copytree(p26, bad)
         with open(os.path.join(bad, "pack.mcmeta"), "w", encoding="utf-8") as f:
             json.dump({"pack": {"pack_format": 107, "description": "wrong"}}, f)
         code, log = run([PY, os.path.join(S, "validate_pack.py"), "--pack", bad, "--namespace", "minecraft",
                          "--song", "demo", "--song-id", "7", "--speed", "80", "--mc-version", "26.2"])
-        check("26.2 只写 pack_format 被判 FAIL", code != 0, log.strip()[-200:])
+        check("26.2 with only pack_format is judged FAIL", code != 0, log.strip()[-200:])
 
-        # ---------- 5. 真实 MIDI 走一遍（examples/demo.mid） ----------
-        print("\n[5] 示例 MIDI 端到端（scan → midi_to_song → make_datapack → validate）")
+        # ---------- 5. a real MIDI through the whole thing (examples/demo.mid) ----------
+        print("\n[5] example MIDI end-to-end (scan → midi_to_song → make_datapack → validate)")
         mid = os.path.join(ROOT, "examples", "demo.mid")
         if not os.path.isfile(mid):
-            check("examples/demo.mid 存在", False, "先跑 python3 tests/gen_demo_midi.py examples/demo.mid")
+            check("examples/demo.mid exists", False, "run python3 tests/gen_demo_midi.py examples/demo.mid first")
         else:
             code, log = run([PY, os.path.join(S, "scan_midi.py"), mid])
-            check("scan_midi.py 跑通并给出判定", code == 0 and "判定" in log, log.strip()[-200:])
+            check("scan_midi.py runs and gives a verdict", code == 0 and "verdict" in log.lower(), log.strip()[-200:])
             song2p = os.path.join(tmp, "demo2.song.json")
             code, log = run([PY, os.path.join(S, "midi_to_song.py"), mid, "-o", song2p,
                              "--name", "demo", "--song-id", "8", "--mc-version", "26.2"])
-            check("midi_to_song.py 跑通", code == 0, log.strip()[-200:])
+            check("midi_to_song.py runs", code == 0, log.strip()[-200:])
             song2 = json.load(open(song2p, encoding="utf-8"))
             n2 = sum(len(t["notes"]) for t in song2["tracks"])
-            check("产出的 song.json 有音符（%d 个）" % n2, n2 > 100)
+            check("the produced song.json has notes (%d)" % n2, n2 > 100)
             ticks2 = sorted({n["t"] for t in song2["tracks"] for n in t["notes"]})
             adj2 = [b for a, b in zip(ticks2, ticks2[1:]) if b - a == 1]
-            check("示例 MIDI 产生了相邻音符 tick（%d 对，正好踩中静音 bug 场景）" % len(adj2), len(adj2) > 0)
+            check("the example MIDI produces adjacent note ticks (%d pairs, exactly the silent bug scenario)" % len(adj2), len(adj2) > 0)
             p2 = os.path.join(tmp, "demo-pack")
             code, log = run([PY, os.path.join(S, "make_datapack.py"), song2p, "-o", p2,
                              "--mc-version", "26.2", "--no-zip"])
-            check("make_datapack.py 处理真实 MIDI 产物", code == 0, log.strip()[-200:])
+            check("make_datapack.py handles the real MIDI output", code == 0, log.strip()[-200:])
             code, log = run([PY, os.path.join(S, "validate_pack.py"), "--pack", p2, "--namespace", "minecraft",
                              "--song", "demo", "--song-id", "8", "--speed", "80", "--mc-version", "26.2"])
-            check("该数据包自检全绿", code == 0, log.strip()[-300:])
+            check("that datapack passes validation", code == 0, log.strip()[-300:])
             code, log = run([PY, os.path.join(S, "doctor.py"), "--pack", p2, "--mc-version", "26.2",
                              "--song", "demo", "--song-id", "8", "--speed", "80"])
-            check("doctor.py 全 [OK]", code == 0 and "[X]" not in log, log.strip()[-200:])
+            check("doctor.py all [OK]", code == 0 and "[X]" not in log, log.strip()[-200:])
             code, log = run([PY, os.path.join(S, "midi_to_song.py"), mid, "-o", os.path.join(tmp, "tr80.json"),
                              "--name", "demo", "--song-id", "8", "--tick-rate", "80"])
-            check("--tick-rate 80 可用（网格 12.5ms）", code == 0 and "12.50 ms" in log, log.strip()[-200:])
+            check("--tick-rate 80 works (grid 12.5ms)", code == 0 and "12.50 ms" in log, log.strip()[-200:])
 
-        # ---------- 6. 红石音乐盒：注册歌曲 → 静态检查 ----------
-        print("\n[6] 红石音乐盒（通用框架 + 注册歌曲）")
+        # ---------- 6. music box: register a song → static checks ----------
+        print("\n[6] music box (generic framework + registered song)")
         box_src = os.path.join(ROOT, "examples", "musicbox", "datapack")
         if not os.path.isdir(box_src):
-            check("examples/musicbox/datapack 存在", False, "缺少音乐盒框架")
+            check("examples/musicbox/datapack exists", False, "the music box framework is missing")
         else:
             code, log = run([PY, os.path.join(S, "check_refs.py"), box_src])
-            check("空盒子的函数引用全部可解析", code == 0, log.strip()[-200:])
+            check("all function references of the empty box resolve", code == 0, log.strip()[-200:])
             box = os.path.join(tmp, "box")
             shutil.copytree(box_src, box)
             lrc = os.path.join(tmp, "t.lrc")
             with open(lrc, "w", encoding="utf-8") as f:
-                f.write("[00:00.00]第一句\n[00:02.50]第二句\n")
+                f.write("[00:00.00]first line\n[00:02.50]second line\n")
             code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
                              "--song", mid, "--name", "Smoke Test Song", "--lrc", lrc])
-            check("add_to_musicbox.py 注册 MIDI + 歌词", code == 0, log.strip()[-200:])
+            check("add_to_musicbox.py registers MIDI + lyrics", code == 0, log.strip()[-200:])
             code, log = run([PY, os.path.join(S, "check_refs.py"), box])
-            check("注册后引用仍全部可解析", code == 0, log.strip()[-200:])
+            check("all references still resolve after registration", code == 0, log.strip()[-200:])
             mx = open(os.path.join(box, "data/rmb/function/song/max.mcfunction"), encoding="utf-8").read()
-            check("#max 被写成 1", "#max mb_cfg 1" in mx, mx.strip()[-120:])
+            check("#max is written as 1", "#max mb_cfg 1" in mx, mx.strip()[-120:])
             songdir = os.path.join(box, "data/rmb/function/song/1")
-            check("歌曲四件套齐全（play/tick/stop/lrc）",
+            check("the song quartet is complete (play/tick/stop/lrc)",
                   all(os.path.isfile(os.path.join(songdir, f)) for f in
                       ("play.mcfunction", "tick.mcfunction", "stop.mcfunction", "lrc.mcfunction")))
             lrcf = open(os.path.join(songdir, "lrc.mcfunction"), encoding="utf-8").read()
-            check("歌词按 nbs_s 排好（2.5s → 50 tick → 4000）", "4000.." in lrcf, lrcf.strip()[-160:])
+            check("lyrics sorted by nbs_s (2.5s → 50 ticks → 4000)", "4000.." in lrcf, lrcf.strip()[-160:])
             menu = open(os.path.join(box, "data/rmb/function/box/menu_list.mcfunction"), encoding="utf-8").read()
-            check("菜单里出现可点击的歌名", "/trigger play set 1" in menu and "Smoke Test Song" in menu)
+            check("the menu shows a clickable song name", "/trigger play set 1" in menu and "Smoke Test Song" in menu)
             code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
                              "--song", mid, "--name", "Second"])
-            check("自动分配第二个编号", code == 0 and "[2]" in log, log.strip()[-160:])
+            check("the second id is allocated automatically", code == 0 and "[2]" in log, log.strip()[-160:])
             code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box, "--remove", "1"])
-            check("可以移除曲目", code == 0, log.strip()[-160:])
+            check("a song can be removed", code == 0, log.strip()[-160:])
             code, log = run([PY, os.path.join(S, "check_refs.py"), box])
-            check("移除后引用仍全部可解析", code == 0, log.strip()[-200:])
+            check("all references still resolve after removal", code == 0, log.strip()[-200:])
             code, log = run([PY, os.path.join(S, "add_to_musicbox.py"), "--box", box,
                              "--song", mid, "--name", "dup", "--id", "2"])
-            check("编号冲突会被拒绝", code != 0)
+            check("an id conflict is rejected", code != 0)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     nfail = sum(1 for _, ok, _ in results if not ok)
-    print("\n%d 项检查，%d 项失败" % (len(results), nfail))
+    print("\n%d checks, %d failed" % (len(results), nfail))
     if nfail:
         for name, _, detail in results:
             if not _:

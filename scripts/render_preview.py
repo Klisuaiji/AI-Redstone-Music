@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""song.json → WAV 试听（不用开 Minecraft 就能先听一遍编曲）。
+"""song.json → WAV preview (listen to the arrangement once without opening Minecraft).
 
-按 song.json 里的时轴规则算出每个音符的**游戏 tick**（与 generate.py 完全同一套换算），
-再用简单的合成音色渲染成 WAV：旋律用带谐波的衰减正弦，鼓组用扫频/噪声。
-音高就是 MIDI 音高本身（音符盒的设计保证"乐器基准 + use-count = 原音高"），
-所以听感上的音高关系与游戏里一致，只是音色不同。
+Works out each note's **game tick** from the timeline rules in song.json (exactly the same
+conversion as generate.py), then renders it to WAV with simple synthetic timbres: decaying sines
+with harmonics for the melody, a frequency sweep / noise for the drums.
+The pitch is the MIDI pitch itself (the note block design guarantees
+"instrument base + use-count = original pitch"), so the perceived pitch relations match the game,
+only the timbre differs.
 
-用法：
+Usage:
     python3 scripts/render_preview.py song.json -o preview.wav
-    python3 scripts/render_preview.py song.json -o piano.wav --lead-inst pling   # 换音色听
-    python3 scripts/render_preview.py song.json -o head.wav --slice 0 30         # 只听前 30 秒
+    python3 scripts/render_preview.py song.json -o piano.wav --lead-inst pling   # try another timbre
+    python3 scripts/render_preview.py song.json -o head.wav --slice 0 30         # first 30 seconds only
 
-仅用标准库（wave / array / math）。
+Standard library only (wave / array / math).
 """
 import argparse, array, json, math, os, sys, wave
 
-try:            # Windows 控制台默认 GBK：让非 GBK 字符（⚠ 等）降级为 ?，而不是直接抛异常
+try:            # Windows console defaults to GBK: let non-GBK characters (⚠ etc.) degrade to ? instead of raising
     sys.stdout.reconfigure(errors="replace")
 except Exception:
     pass
 
-# 每种乐器的谐波配比（1 次/2 次/3 次谐波）与衰减时间常数（秒）
+# per-instrument harmonic mix (1st/2nd/3rd harmonic) and decay time constant (seconds)
 TIMBRE = {
     "harp":   ((1.0, 0.32, 0.12), 0.55), "pling":  ((1.0, 0.45, 0.22), 0.45),
     "bit":    ((1.0, 0.55, 0.35), 0.30), "banjo":  ((1.0, 0.40, 0.25), 0.35),
@@ -41,16 +43,16 @@ def midi_freq(m):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="song.json → WAV 试听")
+    ap = argparse.ArgumentParser(description="song.json → WAV preview")
     ap.add_argument("song")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--rate", type=int, default=22050, help="采样率（默认 22050，够听）")
+    ap.add_argument("--rate", type=int, default=22050, help="sample rate (default 22050, good enough to listen)")
     ap.add_argument("--slice", nargs=2, type=float, default=None, metavar=("START", "END"),
-                    help="只渲染该时间区间（秒）")
-    ap.add_argument("--tail", type=float, default=1.0, help="末尾留白秒数")
+                    help="render only this time range (seconds)")
+    ap.add_argument("--tail", type=float, default=1.0, help="seconds of silence at the end")
     ap.add_argument("--swap", action="append", default=[], metavar="FROM=TO",
-                    help="试听时把某乐器换成另一种音色，可重复（如 harp=pling）")
-    ap.add_argument("--gain", type=float, default=0.9, help="总增益（默认 0.9，自动归一化到该峰值）")
+                    help="swap an instrument for another timbre in the preview; repeatable (e.g. harp=pling)")
+    ap.add_argument("--gain", type=float, default=0.9, help="overall gain (default 0.9; normalized to this peak)")
     a = ap.parse_args()
 
     song = json.load(open(a.song, encoding="utf-8"))
@@ -65,7 +67,7 @@ def main():
             k, v = kv.split("=", 1)
             swap[k.strip()] = v.strip()
 
-    # 收集音符：t → 游戏 tick（与 generate.py 同一套换算：T = round(t*scale)，发声于游戏 tick 80T/speed）
+    # collect notes: t → game tick (same conversion as generate.py: T = round(t*scale), fires at game tick 80T/speed)
     events = []
     for tr in song.get("tracks", []):
         if tr.get("include", True) is False:
@@ -77,7 +79,7 @@ def main():
             tick = 80.0 * T / speed
             events.append((tick / 20.0, inst, n["midi"], float(n.get("vol", 1.0))))
     if not events:
-        sys.exit("song.json 里没有音符")
+        sys.exit("no notes in song.json")
     events.sort()
     total = events[-1][0] + a.tail
     t0, t1 = (a.slice[0], a.slice[1]) if a.slice else (0.0, total)
@@ -102,13 +104,13 @@ def main():
         if i0 >= n_samples:
             continue
         ns = min(ns, n_samples - i0)
-        if inst == "basedrum":                       # 120 → 45 Hz 扫频
+        if inst == "basedrum":                       # 120 → 45 Hz frequency sweep
             ph = 0.0
             for i in range(ns):
                 f = 45.0 + 75.0 * math.exp(-i / (0.03 * rate))
                 ph += 2 * math.pi * f / rate
                 buf[i0 + i] += vol * 1.2 * math.sin(ph) * math.exp(-i / (0.045 * rate))
-        elif inst in ("snare", "hat"):               # 噪声 + 少量音调
+        elif inst in ("snare", "hat"):               # noise + a little tone
             dec = (0.030 if inst == "snare" else 0.012) * rate
             seed = 12345
             for i in range(ns):
@@ -146,12 +148,12 @@ def main():
 
     rms = math.sqrt(sum((x / 32767.0) ** 2 for x in pcm[::7]) / max(1, len(pcm[::7])))
     print("WAV → %s" % a.out)
-    print("  %.2f s / %d Hz / 单声道 16bit / 渲染了 %d 个音符（共 %d）"
+    print("  %.2f s / %d Hz / mono 16bit / rendered %d notes (of %d)"
           % (t1 - t0, rate, used, len(events)))
-    print("  峰值 %.2f（已归一化到 %.2f）/ RMS %.4f / 文件 %.2f MB"
+    print("  peak %.2f (normalized to %.2f) / RMS %.4f / file %.2f MB"
           % (peak * k, a.gain, rms, os.path.getsize(a.out) / 1e6))
     if a.slice:
-        print("  ⚠ 只渲染了切片 %.1fs–%.1fs，完整试听去掉 --slice" % (t0, t1))
+        print("  ⚠ rendered only the slice %.1fs–%.1fs; drop --slice for the full preview" % (t0, t1))
 
 
 if __name__ == "__main__":

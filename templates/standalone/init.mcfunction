@@ -1,7 +1,7 @@
-# 独立模式初始化（/reload 时由 tags/function/load.json 调用）
-# 注意：objective 已存在时 add 会报"已存在"，属正常现象，不影响播放
+# Standalone-mode initialization (called by tags/function/load.json on /reload)
+# Note: when the objective already exists, add reports "already exists" — that is normal and does not affect playback
 scoreboard objectives add music_type dummy
 scoreboard objectives add nbs_s dummy
 scoreboard objectives add nbs_t dummy
-# #speed = 宿主每刻给 nbs_s 的增量。80 → song.json 里的 t 就是游戏 tick（树窗口 80×t 与之配套）
+# #speed = the increment the host adds to nbs_s every tick. 80 → t in song.json is the game tick (the tree window 80×t goes with it)
 scoreboard players set #speed nbs_s 80

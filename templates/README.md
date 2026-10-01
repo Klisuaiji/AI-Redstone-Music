@@ -1,43 +1,44 @@
-# 模板
+# Templates
 
-不想跑脚本、要手工拼文件时用这里的骨架。**能跑脚本就别手拼**——`make_datapack.py` 会自动按目标版本
-选对 `pack.mcmeta` 写法与目录名（历史上最容易错的两处）。
+Skeletons for when you don't want to run the scripts and would rather assemble the files by hand.
+**If you can run the scripts, don't assemble by hand** — `make_datapack.py` automatically picks the right
+`pack.mcmeta` syntax and directory name for the target version (the two spots that historically break most often).
 
-| 文件 | 用途 |
+| File | Purpose |
 |---|---|
-| `song.template.json` | song.json 骨架：4 个声部 + 每个字段的中文说明（以下划线开头的键是注释，会被忽略） |
-| `standalone/pack.mcmeta.26.2.json` | ≥1.21.9 的 `pack.mcmeta`（`min_format`/`max_format`，[主,次] 整数数组） |
-| `standalone/pack.mcmeta.1.21.8.json` | ≤1.21.8 的 `pack.mcmeta`（`pack_format` 整数） |
-| `standalone/init.mcfunction` | 记分板目标 + `#speed nbs_s`（独立模式必需） |
-| `standalone/tags_load.json` | → `data/minecraft/tags/function/load.json`（≤1.20.4 是 `tags/functions/`） |
+| `song.template.json` | song.json skeleton: 4 parts + a note for every field (keys starting with an underscore are comments and are ignored) |
+| `standalone/pack.mcmeta.26.2.json` | `pack.mcmeta` for ≥1.21.9 (`min_format`/`max_format`, `[major,minor]` integer arrays) |
+| `standalone/pack.mcmeta.1.21.8.json` | `pack.mcmeta` for ≤1.21.8 (`pack_format` integer) |
+| `standalone/init.mcfunction` | scoreboard objectives + `#speed nbs_s` (required in standalone mode) |
+| `standalone/tags_load.json` | → `data/minecraft/tags/function/load.json` (`tags/functions/` on ≤1.20.4) |
 | `standalone/tags_tick.json` | → `data/minecraft/tags/function/tick.json` |
 
-## 手工拼一个独立数据包
+## Assembling a standalone datapack by hand
 
 ```
-<数据包名>/
-├── pack.mcmeta                                  ← 按版本选上面两个之一
+<datapack name>/
+├── pack.mcmeta                                  ← pick one of the two above by version
 └── data/
-    ├── <命名空间>/
-    │   └── function/                            ← ≤1.20.4 用 functions/
-    │       └── music/<歌名>/                     ← generate.py 的 -o 输出（play/stop/tick/notes/tree）
-    │           └── init.mcfunction              ← 用 standalone/init.mcfunction
+    ├── <namespace>/
+    │   └── function/                            ← functions/ on ≤1.20.4
+    │       └── music/<song name>/               ← generate.py's -o output (play/stop/tick/notes/tree)
+    │           └── init.mcfunction              ← use standalone/init.mcfunction
     └── minecraft/
-        └── tags/function/                       ← ≤1.20.4 用 tags/functions/
-            ├── load.json                        ← values 指向 <命名空间>:music/<歌名>/init
-            └── tick.json                        ← values 指向 <命名空间>:music/<歌名>/tick
+        └── tags/function/                       ← tags/functions/ on ≤1.20.4
+            ├── load.json                        ← values points to <namespace>:music/<song name>/init
+            └── tick.json                        ← values points to <namespace>:music/<song name>/tick
 ```
 
-三处必须自洽，否则整包静默失效：
-1. `pack.mcmeta` 的写法要和目标版本匹配（≥1.21.9 用 `min_format`/`max_format`，且不能写小数 `107.1`）
-2. 目录名和版本匹配（≥1.21 单数 `function/`，1.14–1.20.6 复数 `functions/`）——**少一个 s 整包不加载**
-3. 标签里的路径写法是 `<命名空间>:<路径>`，**不带** `function/`、**不带** `.mcfunction`
+These three things must agree with each other, otherwise the whole pack silently fails:
+1. The `pack.mcmeta` syntax must match the target version (≥1.21.9 uses `min_format`/`max_format`, and you must not write a decimal such as `107.1`)
+2. The directory name must match the version (≥1.21 singular `function/`, 1.14–1.20.6 plural `functions/`) — **one missing `s` and the whole pack won't load**
+3. Tag paths are written `<namespace>:<path>`, **without** `function/` and **without** `.mcfunction`
 
-拼完跑一遍自检：
+Run a validation pass after assembling:
 
 ```bash
-python3 scripts/validate_pack.py --pack <数据包名> --namespace <命名空间> --song <歌名> --song-id <编号> --speed 80 --mc-version <版本>
-python3 scripts/doctor.py       --pack <数据包名> --mc-version <版本> --song <歌名> --song-id <编号>
+python3 scripts/validate_pack.py --pack <datapack name> --namespace <namespace> --song <song name> --song-id <id> --speed 80 --mc-version <version>
+python3 scripts/doctor.py       --pack <datapack name> --mc-version <version> --song <song name> --song-id <id>
 ```
 
-对应格式数字与分水岭见 [`references/datapack.md`](../references/datapack.md)。
+For the matching format numbers and the boundary between them, see [`references/datapack.md`](../references/datapack.md).

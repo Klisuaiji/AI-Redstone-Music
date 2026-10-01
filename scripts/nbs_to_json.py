@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# .nbs(Open Note Block Studio) → song.json；经典格式为主，自动探测 OpenNBS 新格式
+# .nbs (Open Note Block Studio) → song.json; classic format first, with auto-detection of the new OpenNBS format
 import struct, json, sys, argparse
 
 NBS2MC = ["harp","bass","basedrum","snare","hat","guitar","flute","bell","chime",
@@ -18,17 +18,17 @@ class R:
 def parse(path):
     r = R(open(path,"rb").read())
     ver = 0
-    if r.i16() == 0:            # OpenNBS 新格式：0 签名 + 版本 + 默认乐器数
+    if r.i16() == 0:            # new OpenNBS format: 0 signature + version + default instrument count
         ver = r.u8(); r.u8(); length=r.s16(); layers=r.s16()
-    else:                       # 经典格式：首 short 即长度
+    else:                       # classic format: the first short is the length
         r.i = 0; length=r.s16(); layers=r.s16()
     r.s(); r.s(); r.s(); r.s()  # name/author/origin author/description
     tps = r.i16()/100.0
     r.u8(); r.u8(); r.u8()
     r.i32(); r.i32(); r.i32(); r.i32(); r.i32()
-    if ver == 0: r.s()          # 经典格式尾部文件名
+    if ver == 0: r.s()          # classic format trailing file name
     else:
-        # 新格式 v1+: loop/loopcount/loopstart；v2+: midi 名。按规范顺序尽力读取
+        # new format v1+: loop/loopcount/loopstart; v2+: midi name. Best-effort read in spec order
         try:
             if ver >= 1: r.u8(); r.u8(); r.s16()
             if ver >= 2: r.s()
@@ -61,7 +61,7 @@ def parse(path):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("nbs"); ap.add_argument("-o","--out",required=True)
-    ap.add_argument("--meta", default="{}", help='JSON 字符串, 如 {"mc_version":"1.20.4","song_id":9}')
+    ap.add_argument("--meta", default="{}", help='JSON string, e.g. {"mc_version":"1.20.4","song_id":9}')
     a = ap.parse_args()
     tps, tracks = parse(a.nbs)
     meta = {"name":"song","namespace":"minecraft","path":"music/song","mc_version":"1.21",
@@ -70,6 +70,6 @@ def main():
     meta.update(json.loads(a.meta))
     meta["path"] = "music/" + meta["name"]
     json.dump({"meta":meta,"tracks":tracks}, open(a.out,"w",encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("OK: %d tracks, tps=%s → %s（midi=key+21 为音符盒记法）" % (len(tracks), tps, a.out))
+    print("OK: %d tracks, tps=%s → %s (midi=key+21 is the note block notation)" % (len(tracks), tps, a.out))
 
 if __name__ == "__main__": main()

@@ -1,95 +1,95 @@
-# MIDI 实战解析与对齐(真实交付经验:反乌托邦 → LobbyMusicPack song_id 16)
+# MIDI parsing and alignment in practice (a real delivery: Dystopia → LobbyMusicPack song_id 16)
 
-本文件是一次完整真实交付(MIDI 伴奏 + 音频人声双源、PowerShell 5.1 无 Python 环境、
-lemon 系宿主数据包)沉淀的可复用经验。格式规范仍以 format_spec.md 为准。
+This file distills reusable lessons from one complete real delivery (MIDI accompaniment + audio vocal dual source, PowerShell 5.1
+with no Python environment, lemon-family host datapack). The format specification still follows format_spec.md.
 
-## 1. 只数 note-on,不要依赖 note-on/off 配对
+## 1. Count note-on only, do not rely on note-on/off pairing
 
-配对式解析器用 `dict[channel+pitch]` 记录开启音符,遇到**同音高重叠**(吉他/鼓极常见)会互相覆盖:
-结果音符数大幅少计(实测 960→366)并出现几百秒长的"粘住音符"。
-音符盒音乐只需要 **onset 时刻**(0x90 vel>0),时长无用——直接遍历 note-on 提取。
-"粘住音符"(endTick 远超曲长)= note-off 缺失,该轨仍可用其 note-on 时刻,不要整轨丢弃。
+A pairing parser records open notes in `dict[channel+pitch]`, and **same-pitch overlaps** (extremely common in guitar/drums) overwrite each other:
+the note count is badly undercounted (measured 960→366) and "stuck notes" hundreds of seconds long appear.
+Note block music only needs the **onset time** (0x90 vel>0); duration is useless — just walk the note-ons directly.
+A "stuck note" (endTick far beyond the song length) = a missing note-off; that track's note-on times are still usable, do not discard the whole track.
 
-## 2. 现实中的 MIDI 结构很乱
+## 2. Real-world MIDI structure is messy
 
-- **format 0 却带多个 MTrk chunk** 是非法但真实存在的,按 chunk 顺序解析即可,别相信 header 的 format;
-- **按轨道名(FF 03 meta)路由声部,不要按轨道下标**——删一条轨后下标全变,名字不变
-  (真实案例:按用户要求删掉 electric bass 轨后,原 track4 的 distorted guitar 变成 track3);
-- varlen 续字节最高位=1、终止字节最高位=0,写反会把整轨解析成垃圾;
-- running status:数据字节前无状态字节时沿用上一个状态;遇到 F0/F7 后 running 清零;
-- 曲长校验:最后一个 onset 换算的秒数应接近音频时长(真实案例 147.78s ↔ 147.9s)。
+- **format 0 carrying multiple MTrk chunks** is illegal but really exists; just parse in chunk order and do not trust the header's format;
+- **Route parts by track name (FF 03 meta), not by track index** — deleting one track shifts every index, but the names stay the same
+  (real case: after deleting the electric bass track on the user's request, the distorted guitar that was track4 became track3);
+- varlen continuation bytes have the high bit = 1 and the terminating byte has the high bit = 0; getting it backwards parses the whole track as garbage;
+- running status: when a data byte is preceded by no status byte, reuse the previous status; after F0/F7 running status is cleared;
+- Song length check: the seconds converted from the last onset should be close to the audio duration (real case 147.78s ↔ 147.9s).
 
-## 3. BPM 对齐验证(多源混合时必做)
+## 3. BPM alignment verification (mandatory when mixing multiple sources)
 
-MIDI 标称速度常与参考音频不符(真实案例:MIDI 120 BPM,原曲 117 BPM,但音符时刻按
-文件自带 120 换算后与音频吻合)。当伴奏取自 MIDI、人声取自音频分析时,两套时间轴必须统一:
+MIDI's nominal tempo often disagrees with the reference audio (real case: MIDI 120 BPM, the original song 117 BPM, yet the note times converted
+at the file's own 120 line up with the audio). When the accompaniment comes from MIDI and the vocals come from audio analysis, the two timelines must be unified:
 
-1. 从音频提取 ground truth(鼓 onset / 人声基频);
-2. 按候选速度换算 MIDI onset,与 ground truth 算**匹配率**(±60ms)和**偏移直方图**;
-3. 匹配率明显更高 + 偏移集中于常数(如 +0.06s,onset 检测的普遍提前量)→ 采用该换算,勿再做缩放;
-4. 整体偏移 ≤ 0.06s(≈1 game tick)可忽略;偏移大则统一平移。
+1. Extract ground truth from the audio (drum onsets / vocal fundamental frequency);
+2. Convert MIDI onsets at each candidate tempo and compute a **match rate** (±60ms) and an **offset histogram** against the ground truth;
+3. Clearly higher match rate + offsets concentrated at a constant (e.g. +0.06s, the general lead of onset detection) → adopt that conversion, do not scale any further;
+4. An overall offset ≤ 0.06s (≈1 game tick) can be ignored; if the offset is larger, shift everything uniformly.
 
-## 4. 音频 onset 检测会误报,干净 MIDI 更可信
+## 4. Audio onset detection produces false positives; clean MIDI is more trustworthy
 
-真实案例:音频提取在前奏 0-10s 检出密集"底鼓",实际全是钢琴低音;干净 MIDI 鼓轨显示
-鼓 10.04s 才进入(正确)。**鼓的进入时刻、密度用 MIDI 校正音频提取**;MIDI 缺失或损坏时
-才用音频提取,并人工清理前奏等无鼓段落。
+Real case: audio extraction detected dense "kick drums" in the 0-10s intro, when they were actually all low piano notes; the clean MIDI drum track shows
+the drums only enter at 10.04s (correct). **Use MIDI to correct audio extraction for the drums' entry time and density**; only when MIDI is missing or
+corrupt should you fall back to audio extraction, and clean up drum-free passages such as the intro by hand.
 
-## 5. 去重规则
+## 5. Deduplication rules
 
-同一声部同 tick 的**和弦必须保留**(采样键盘/吉他轨常见 2-4 音和弦)。
-去重键 = (tick, 乐器, pitch);按 (tick, 乐器) 去重会吞掉和弦。
+**Chords in the same part on the same tick must be kept** (2-4 note chords are common in sampled keyboard/guitar tracks).
+The dedup key = (tick, instrument, pitch); deduplicating by (tick, instrument) swallows chords.
 
-## 6. 混音默认音量(经用户听感两轮校准)
+## 6. Default mix volumes (calibrated over two rounds of user listening)
 
-| 声部 | 乐器 | vol |
+| Part | Instrument | vol |
 |---|---|---|
-| 人声主旋律 | pling | 1.0 |
-| 前奏/伴奏和声 | harp / guitar | 1.0 |
-| 点缀 | bit | 0.5 |
-| 贝斯 | bass | 1.0 |
-| 底鼓 | basedrum | 0.6 |
-| 军鼓 | snare | 0.5 |
-| 踩镲/叮镲 | hat | 0.25 |
+| vocal lead melody | pling | 1.0 |
+| intro/accompaniment harmony | harp / guitar | 1.0 |
+| accents | bit | 0.5 |
+| bass | bass | 1.0 |
+| kick drum | basedrum | 0.6 |
+| snare drum | snare | 0.5 |
+| hi-hat/ride | hat | 0.25 |
 
-经验:鼓默认**宁小勿大**——踩镲每 16 分音符一个,vol 0.5 就会"声音全被鼓点占住"
-(用户原话)。密集声部(每 tick 多个 playsound)是叠加关系,不是替换。
+Experience: drums should **err on the quiet side** by default — the hi-hat hits once every 16th note, and at vol 0.5 "the drums take over the whole sound"
+(the user's own words). Dense parts (several playsounds per tick) stack; they do not replace each other.
 
-## 7. #speed 与树窗口的配套关系
+## 7. How #speed and the tree window go together
 
-lemon 系宿主包每刻执行 `nbs_s += #speed`;树叶子窗口为 `80*t..80*t+160`。
-**note tick = 游戏 tick 时必须 #speed = 80**(真实包 load.mcfunction 实测值)。
-换宿主时先问 #speed:若 ≠80,要么按其值重标时间轴,要么说明不兼容。
-接歌链(下一首)由 stop.mcfunction 的 `function <ns>:<path>/play` 完成,更新单曲时不要动宿主的 main/tick 标签。
+A lemon-family host pack runs `nbs_s += #speed` every tick; the tree leaf window is `80*t..80*t+160`.
+**When note tick = game tick, #speed must = 80** (measured value from a real pack's load.mcfunction).
+When switching hosts, ask about #speed first: if it is ≠80, either re-scale the timeline to its value or state that it is incompatible.
+Song chaining (the next song) is done by `function <ns>:<path>/play` in stop.mcfunction; do not touch the host's main/tick tags when updating a single song.
 
-## 8. 纯 PowerShell 5.1 无 Python 环境的坑
+## 8. Pitfalls of a pure PowerShell 5.1 environment with no Python
 
-- 变量名**不区分大小写**:解析器局部变量 `$tag` 会覆盖生成配置 `$TAG`(实测翻车);
-- 无三元 `?:`、无 `??`;`ReadStr 4 -ne "MTrk"` 在命令模式会把 `-ne` 当参数,先赋值再比较;
-- 含非 ASCII 的 .ps1 必须 **UTF-8 BOM**,否则中文路径/字符串按 GBK 误读;
-- 从 bash 调用时,反引号转义会被 bash 先吃掉,写 .ps1 文件再 `-File` 执行最稳;
-- varlen/配对逻辑先拿已知正确的小文件(如 lemon 参考包对应的 MIDI)回归验证后再上真文件。
+- Variable names are **case-insensitive**: a parser local variable `$tag` overwrites the generation config `$TAG` (measured, it bit us);
+- No ternary `?:`, no `??`; in command mode `ReadStr 4 -ne "MTrk"` treats `-ne` as an argument — assign to a variable first, then compare;
+- A .ps1 containing non-ASCII must have a **UTF-8 BOM**, otherwise Chinese paths/strings are misread as GBK;
+- When called from bash, backtick escaping is eaten by bash first; writing a .ps1 file and running it with `-File` is the most reliable;
+- Regression-test the varlen/pairing logic on a small known-good file (e.g. the MIDI corresponding to the lemon reference pack) before running it on the real file.
 
-## 9. 交付前必须做的一致性自检(生成后端,不是 MIDI 解析)
+## 9. The consistency self-check that must be done before delivery (the generation back end, not MIDI parsing)
 
-真实交付里发现的一个**偶发静音 bug**,建议每一单都查一遍:
+An **intermittent silent-note bug** found in a real delivery; check for it on every order:
 
-- `generate.py` 的树叶子若写成 2 格宽(`b-a<=1`)却只输出 `rng[0]`,那么"相邻 tick 对 `(2k,2k+1)`
-  同时有音符"时,`notes/2k+1.mcfunction` 会生成却**没有任何 tree 节点调用它** → 该音符永久静音。
-  二分出的最深层叶子恒为对齐的 `[2k,2k+1]`,所以低 tick 为奇数的相邻对 `(2k+1,2k+2)` 分属两个叶子、
-  不受影响——只吃掉一半相邻对,听感上极难发现。
-- 实测:某曲 1169 个 notes 里 **79 个不可达**;上游成品包 after_the_rain 491 个、fanwutuobang 85 个;
-  而 badapple 的 639 对相邻 tick 恰好低 tick 全为奇数,侥幸 0 损失——正因如此才会长期漏测。
-- 同一个 2 格宽叶子还有第二个副作用:**右半边的音符早响 1 个游戏 tick(50 ms)**。窗口从叶子左边界
-  80a 起算,所以 t=2k+1 的音符在 nbs_s = 80·2k 时就被命中。实测上游示例包 fanwutuobang_demo 的
-  117 个 notes 里有 **54 个早响 1 tick**(如 notes/3 的叶子是 `2_3`、窗口 `160..400`,游戏 tick 2 就响)。
-  1 格宽叶子窗口 `80t..80t+160` 恰好在游戏 tick = t 触发,两个问题一起消失。
-- 自检口径(任一不满足即算失败):
-  1. 每个 `notes/<t>.mcfunction` 都被 tree **恰好引用 1 次**;
-  2. 每个 tree 节点都能从 tick.mcfunction 里的树根**可达**,无悬空子节点;
-  3. 跑一遍树状态机模拟(`nbs_s += #speed` → 按窗口/守卫逐层下降 → 记录真正被调用的 notes),
-     断言每个音符 tick 在**游戏 tick == t** 时恰好触发一次(既能抓静音,也能抓早响/重复)。
-- 直接跑 `python3 scripts/validate_pack.py --pack <数据包根> --namespace <ns> --song <歌名> --song-id <id> --speed <值>`,
-  它把上面三条连同乐器白名单、音域、CRLF、标签一起查了。
+- If `generate.py`'s tree leaf is written 2 blocks wide (`b-a<=1`) but only outputs `rng[0]`, then when "an adjacent tick pair `(2k,2k+1)`
+  both has notes", `notes/2k+1.mcfunction` is generated but **no tree node calls it** → that note is permanently silent.
+  The deepest leaf produced by bisection is always the aligned `[2k,2k+1]`, so an adjacent pair whose lower tick is odd, `(2k+1,2k+2)`, belongs to two
+  different leaves and is unaffected — only half of the adjacent pairs are eaten, which is extremely hard to notice by ear.
+- Measured: of 1169 notes in one song, **79 are unreachable**; upstream finished packs after_the_rain 491, fanwutuobang 85;
+  while badapple's 639 adjacent tick pairs all happen to have odd lower ticks and escape with 0 losses — which is exactly why it went undetected for so long.
+- The same 2-block-wide leaf has a second side effect: **notes in its right half fire 1 game tick (50 ms) early**. The window is counted from the leaf's left
+  boundary 80a, so notes with t=2k+1 are hit when nbs_s = 80·2k. Measured on the upstream example pack fanwutuobang_demo:
+  **54 of its 117 notes fire 1 tick early** (e.g. the leaf of notes/3 is `2_3`, window `160..400`, so it sounds at game tick 2).
+  A 1-block-wide leaf's window `80t..80t+160` triggers exactly at game tick = t, and both problems disappear together.
+- Self-check criteria (failing any one counts as failure):
+  1. Every `notes/<t>.mcfunction` is **referenced exactly once** by the tree;
+  2. Every tree node is **reachable** from the tree root in tick.mcfunction, with no dangling child nodes;
+  3. Run the tree state-machine simulation (`nbs_s += #speed` → descend level by level by window/guard → record the notes actually called),
+     and assert that every note tick triggers exactly once at **game tick == t** (this catches silent notes as well as early firing/duplicates).
+- Just run `python3 scripts/validate_pack.py --pack <datapack root> --namespace <ns> --song <song name> --song-id <id> --speed <value>`,
+  which checks the three items above together with the instrument whitelist, pitch range, CRLF and tags.
 
-> 结论:**叶子宽度 = 1 格**是硬要求(见 `references/format_spec.md` §A),窗口/守卫公式不用动。
+> Conclusion: **leaf width = 1 block** is a hard requirement (see `references/format_spec.md` §A); the window/guard formulas do not need to change.

@@ -1,190 +1,182 @@
 ---
 name: mc-redstone-music
 description: >-
-  把歌曲（MIDI / .nbs 工程 / 文字谱面）转换成 Minecraft Java 版原版可播放的 mcfunction 音符盒音乐数据包，
-  支持独立数据包与 lemon 兼容两种交付。当用户要求"做红石音乐""把这首歌做成我的世界音乐""MIDI 转
-  mcfunction""生成音符盒音乐数据包""用指令播放这首歌""note block music datapack""MIDI to Minecraft
-  music""convert a song into a Minecraft datapack""做一个能在原版 MC 里播的歌"时使用。覆盖 1.13 至
-  26.x（含 pack.mcmeta 两代写法、function/functions 目录分水岭、/tick rate 精度进阶）。
+  Convert a song (MIDI / .nbs project / text score) into a vanilla-playable Minecraft Java Edition
+  mcfunction note block music datapack, with both standalone-datapack and lemon-compatible delivery.
+  Use when the user asks to "make redstone music", "turn this song into Minecraft music", "MIDI to
+  mcfunction", "generate a note block music datapack", "play this song with commands", or for a
+  "note block music datapack", "MIDI to Minecraft datapack", "convert a song into a Minecraft
+  datapack", "make a song that plays in vanilla MC". Covers 1.13 through 26.x (including the two
+  generations of pack.mcmeta syntax, the function/functions directory-naming boundary, and the
+  /tick rate precision upgrade).
 ---
 
-# Minecraft 红石音乐 mcfunction 工作流
+# Minecraft redstone music mcfunction workflow
 
-把一首歌变成**原版 Minecraft Java 版**里 `/function` 就能播的数据包（音符盒音色，不需要 mod、不需要资源包）。
+Turn a song into a datapack that plays in **vanilla Minecraft Java Edition** with `/function` (note block sounds, no mods, no resource pack required).
 
-## 铁律
+## Rules
 
-1. 只支持 **Minecraft Java 版 ≥ 1.13**（数据包 1.13 才有）。Bedrock 没有 `/function`，直接说明并停止。
-2. 所有乐器/音效 ID 必须来自 `references/instruments.md` 白名单，且满足目标版本（pling/bit/banjo 需 1.14+，
-   trumpet 需 26.1+）。
-3. **不知道的事不许编**：听不了音频就明说，改要 MIDI / .nbs / 文字谱面。只有 mp3 时按 `references/recipes.md` §8
-   如实告知转录质量落差。
-4. **时轴只有一套已验证的约定**：`time_unit=nbs_s_units` + `#speed nbs_s = 80`（此时 song.json 里的 `t`
-   就是游戏 tick）。宿主 `#speed` 不是 80 时必须重标时间轴并说明，不许直接照搬。
-5. **交付前必须跑自检**，且**没实机验证就不说"能听"**（见下方「交付准则」）。
+1. Only **Minecraft Java Edition ≥ 1.13** is supported (datapacks only exist from 1.13). Bedrock has no `/function`: state that plainly and stop.
+2. Every instrument/sound ID must come from the `references/instruments.md` whitelist and must be available in the target version (pling/bit/banjo require 1.14+, trumpet requires 26.1+).
+3. **Never make up what you do not know**: if you cannot listen to the audio, say so and ask for MIDI / .nbs / a text score instead. With only an mp3, disclose the transcription quality gap honestly per `references/recipes.md` §8.
+4. **There is exactly one verified timeline convention**: `time_unit=nbs_s_units` + `#speed nbs_s = 80` (in which case `t` in song.json is the game tick). If the host's `#speed` is not 80, you must re-time the timeline and explain it; never carry it over as-is.
+5. **You must run the self-check before delivery**, and **never claim it "plays" without real in-game verification** (see "Delivery rules" below).
 
-## 交付准则（先读，这是最容易犯的错）
+## Delivery rules (read this first — it is the most common mistake)
 
-静态自检能证明的和不能证明的，必须分清：
+You must keep apart what a static self-check can prove and what it cannot:
 
-| 证据 | 能证明什么 | 怎么拿到 |
+| Evidence | What it proves | How to get it |
 |---|---|---|
-| `validate_pack.py` 全绿 | 每个 `notes/<t>` 都被 tree 恰好引用一次、树节点全部可达、乐器/音域/pitch/CRLF/标签/song_id 全部合规，**并且用树状态机模拟证明"每个音符在游戏 tick == t 时恰好触发一次"** | 必做 |
-| `render_preview.py` 出的 wav | 音高关系、节奏、声部平衡大致对（音色不是游戏音色） | 推荐 |
-| 进游戏实听 | 音色、手感、有没有卡顿——**唯一最终判据** | 交付说明里如实交代 |
+| `validate_pack.py` all green | every `notes/<t>` is referenced by the tree exactly once, all tree nodes are reachable, instruments/pitch range/pitch/CRLF/tags/song_id are all compliant, **and a tree state-machine simulation proves "every note triggers exactly once at game tick == t"** | mandatory |
+| the wav from `render_preview.py` | pitch relationships, rhythm and part balance are roughly right (the timbre is not the in-game timbre) | recommended |
+| listening inside the game | timbre, feel, and whether it stutters — **the only final verdict** | disclose honestly in the delivery notes |
 
-- **不许**在没进游戏的情况下说"已经能听了/已安装"。正确说法是：
-  「静态自检全绿（含树状态机模拟）+ 试听 wav 已生成；**未在游戏内实听确认**」。
-- **不许**把"数据包能加载"说成"音乐能播"。
-- 做了折八度、删轨、改音量等妥协，必须写进编曲决策说明——**不要粉饰**。
+- **Do not** say "it already plays / it is installed" without having entered the game. The correct wording is:
+  "static self-check all green (including the tree state-machine simulation) + preview wav generated; **not confirmed by listening in-game**".
+- **Do not** turn "the datapack loads" into "the music plays".
+- Any compromise you made — octave folding, deleted tracks, changed volumes — must be written into the arrangement decision notes. **Do not gloss over it.**
 
-## 工具一览（`scripts/`，全部零依赖，只用标准库）
+## Tool overview (`scripts/`, all zero-dependency, standard library only)
 
-| 脚本 | 什么时候用 | 一句话 |
+| Script | When to use it | In one line |
 |---|---|---|
-| `scan_midi.py` | 第二步：拿到 MIDI 先体检 | 声部清单 / 音高范围 / 鼓组 GM 直方图 / 节奏网格 / 量化误差 / 一句判定 |
-| `midi_to_song.py` | 第三、四步：自动编曲 | 轨道分类→乐器映射→音量表→时轴量化→八度折叠→去重，产出 song.json **+ 编曲决策报告** |
-| `nbs_to_json.py` | 音源是 .nbs 工程 | OpenNBS / 经典 .nbs → song.json |
-| `generate.py` | 第五步：生成 mcfunction | song.json → `play/stop/tick/notes/tree`（树窗口调度，与 lemon 参考包逐文件比对过的算法） |
-| `validate_pack.py` | 第五步：硬门禁（CI 用） | tree↔notes 一致性 + 可达性 + 白名单/音域/CRLF/标签 + **树状态机模拟** |
-| `make_datapack.py` | 第六步：组装交付物 | song.json → 可安装数据包 + zip；**按目标版本自动选 pack.mcmeta 两代写法与目录名** |
-| `render_preview.py` | 交付前试听 | song.json → WAV（简单合成音色，不用开游戏） |
-| `doctor.py` | 出问题时 | "怎么没声音"逐项体检，每条 ✗ 下面给修法 |
-| `add_to_musicbox.py` | 要把歌装进红石音乐盒 | 注册/移除歌曲，自动维护曲目表、点歌菜单、歌名字幕；支持从 `.mid` 一步到位 + `.lrc` 歌词 |
-| `check_refs.py` | 改完数据包 | 通用静态检查：函数引用是否都能解析、JSON 合法性、CRLF |
+| `scan_midi.py` | Step 2: health-check the MIDI first | part list / pitch range / drum-kit GM histogram / rhythm grid / quantization error / one-line verdict |
+| `midi_to_song.py` | Steps 3 and 4: automatic arrangement | track classification → instrument mapping → volume table → timeline quantization → octave folding → dedup, producing song.json **+ an arrangement decision report** |
+| `nbs_to_json.py` | the source is an .nbs project | OpenNBS / classic .nbs → song.json |
+| `generate.py` | Step 5: generate mcfunction | song.json → `play/stop/tick/notes/tree` (tree-window scheduling, an algorithm compared file by file against the lemon reference pack) |
+| `validate_pack.py` | Step 5: hard gate (for CI) | tree↔notes consistency + reachability + whitelist/pitch range/CRLF/tags + **tree state-machine simulation** |
+| `make_datapack.py` | Step 6: assemble the deliverable | song.json → installable datapack + zip; **automatically picks the right generation of pack.mcmeta syntax and directory name for the target version** |
+| `render_preview.py` | preview before delivery | song.json → WAV (simple synthesized timbre, no need to open the game) |
+| `doctor.py` | when something goes wrong | a per-item checkup for "why is there no sound", with a fix under every ✗ |
+| `add_to_musicbox.py` | to install a song into the Redstone Music Box | register/remove songs, automatically maintaining the song table, the song menu and the song-name subtitles; supports one-step from `.mid` + `.lrc` lyrics |
+| `check_refs.py` | after changing a datapack | generic static checks: whether every function reference resolves, JSON validity, CRLF |
 
-一条龙：
+All-in-one:
 
 ```bash
-python3 scripts/scan_midi.py 歌曲.mid
-python3 scripts/midi_to_song.py 歌曲.mid -o song.json --name <歌名> --song-id <编号> \
-    --mc-version <版本> --report 编曲说明.md
+python3 scripts/scan_midi.py song.mid
+python3 scripts/midi_to_song.py song.mid -o song.json --name <song name> --song-id <id> \
+    --mc-version <version> --report arrangement-notes.md
 python3 scripts/render_preview.py song.json -o preview.wav
-python3 scripts/make_datapack.py song.json -o out/<歌名> --mc-version <版本>
-python3 scripts/validate_pack.py --pack out/<歌名> --namespace minecraft --song <歌名> \
-    --song-id <编号> --speed 80 --mc-version <版本>
+python3 scripts/make_datapack.py song.json -o out/<song name> --mc-version <version>
+python3 scripts/validate_pack.py --pack out/<song name> --namespace minecraft --song <song name> \
+    --song-id <id> --speed 80 --mc-version <version>
 ```
 
-没有 Python 环境：按 `templates/` 手工拼，规则见 `references/format_spec.md` §A/§D 与 `templates/README.md`。
+No Python environment: assemble it by hand following `templates/`; the rules are in `references/format_spec.md` §A/§D and `templates/README.md`.
 
-## 第一步：必须向用户提问（缺一不可）
+## Step 1: you must ask the user (all of these are required)
 
-1. **MC Java 版本**（如 1.20.4 / 1.21.8 / 26.2）——决定可用乐器、目录名（`functions` vs `function`）、
-   pack.mcmeta 写法、能不能用 `/tick rate`。
-2. **音源形式**：MIDI / MusicXML / OpenNBS 工程 / 文字谱面？（音频请按 §8 如实说明）
-3. **声部取舍**：是否保留主旋律 / 鼓组 / 和声 / 低音？可逐轨 include/exclude。
-4. **交付物**：song.json / mcfunction 文件夹 / 完整可安装数据包 zip？可多选。
-5. **集成方式**：A. **lemon 兼容**——用户已有音乐数据包，只交付歌曲文件夹；
-   B. **独立数据包**——自带 init/tick 标签，丢进 `datapacks/` 就能用（`make_datapack.py` 负责）；
-   C. **装进红石音乐盒**——用户要"唱片机 + 点歌菜单 + 歌词 + 维度禁播"那套交互时，
-   用 `add_to_musicbox.py` 把歌注册进 `examples/musicbox/` 的框架（见「第六步」）。
-6. lemon 兼容模式追加问：**song_id**（宿主内未占用的编号，lemon 原包占 8）、**namespace/path**、
-   宿主的 **`#speed nbs_s`** 值（`/scoreboard players get #speed nbs_s`）。**不是 80 就要重标时间轴。**
+1. **MC Java version** (e.g. 1.20.4 / 1.21.8 / 26.2) — it determines the available instruments, the directory name (`functions` vs `function`), the pack.mcmeta syntax, and whether `/tick rate` can be used.
+2. **Source form**: MIDI / MusicXML / OpenNBS project / text score? (for audio, disclose honestly per §8)
+3. **Part selection**: keep the lead melody / drums / harmony / bass? Each track can be included/excluded individually.
+4. **Deliverable**: song.json / an mcfunction folder / a complete installable datapack zip? Multiple choices allowed.
+5. **Integration mode**: A. **lemon-compatible** — the user already has a music datapack and you deliver only the song folder;
+   B. **standalone datapack** — it ships with its own init/tick tags, so dropping it into `datapacks/` just works (`make_datapack.py` handles this);
+   C. **install into the Redstone Music Box** — when the user wants that jukebox + song menu + lyrics + per-dimension playback ban interaction, use `add_to_musicbox.py` to register the song into the framework in `examples/musicbox/` (see "Step 6").
+6. lemon-compatible mode asks additionally: **song_id** (a number unused in the host; the original lemon pack occupies 8), **namespace/path**, and the host's **`#speed nbs_s`** value (`/scoreboard players get #speed nbs_s`). **If it is not 80 you must re-time the timeline.**
 
-## 第二步：分析音源
+## Step 2: analyze the source
 
 ```bash
-python3 scripts/scan_midi.py 歌曲.mid --json report.json
+python3 scripts/scan_midi.py song.mid --json report.json
 ```
 
-它会给出：tempo/时长、逐轨（名称·声道·音色号·音符数·音高范围·八度分布）、鼓组 GM 直方图、
-节奏网格与量化误差、**声部映射判定**。把判定念给用户，并据此定编曲方案。
+It reports: tempo/duration, per track (name · channel · program number · note count · pitch range · octave distribution), the drum-kit GM histogram, the rhythm grid and quantization error, and a **part-mapping verdict**. Read the verdict to the user and set the arrangement plan from it.
 
-MIDI 实战坑（详见 `references/midi_notes.md`）：只数 note-on、别信 header format、按轨道名路由声部、
-别套 16 分网格（很多转录是 1/100 拍的人性化网格）。
+MIDI field traps (see `references/midi_notes.md` for details): count note-on only, do not trust the header format, route parts by track name, and do not force a 16th-note grid (many transcriptions use a humanized 1/100-beat grid).
 
-多源混合（MIDI 伴奏 + 音频人声）时必须先做 BPM 对齐验证（`references/midi_notes.md` §3）。
+For mixed sources (MIDI accompaniment + audio vocals) you must verify BPM alignment first (`references/midi_notes.md` §3).
 
-## 第三步：编曲（音源声部 → 音符盒乐器）
+## Step 3: arrangement (source parts → note block instruments)
 
 ```bash
-python3 scripts/midi_to_song.py 歌曲.mid -o song.json --name <歌名> --song-id <编号> \
-    --mc-version <版本> --report 编曲说明.md
+python3 scripts/midi_to_song.py song.mid -o song.json --name <song name> --song-id <id> \
+    --mc-version <version> --report arrangement-notes.md
 ```
 
-自动规则（可用参数覆盖）：鼓声道/鼓关键词 → basedrum 0.6 / snare 0.5 / hat 0.25；名称含 bass → `bass`；
-其余轨按 `--lead-split`（默认 72）拆主旋律/和弦，`--lead-inst auto` 会优先挑"整轨塞得进单一乐器"的那个。
+Automatic rules (overridable by flags): drum channels/drum keywords → basedrum 0.6 / snare 0.5 / hat 0.25; names containing bass → `bass`; the remaining tracks are split into lead melody/chords by `--lead-split` (default 72), and `--lead-inst auto` prefers the instrument that can hold the entire track.
 
-原则：
+Principles:
 
-- 主旋律：`pling`（明亮电钢）/ `flute`（高八度补充）/ `bit`（合成）/ `harp`（中音温暖）。
-  **单个乐器只有 25 个半音**，跨度大就按音区拆分或折八度（都会记进报告）。
-- 低音：`bass`；和弦：`guitar` / `banjo`；高音点缀：`bell` / `chime` / `xylophone`；
-  铜管仅 26.1+ 用 `trumpet` 系列。头颅乐器（1.20+）没有音高概念，**禁止用于旋律**。
-- 默认混音音量（经听感校准）：人声主旋律/伴奏 1.0、bass 1.0、bit 0.5、底鼓 0.6、军鼓 0.5、踩镲 0.25。
-  **鼓宁小勿大**——密集踩镲用 0.5 就会淹没全曲。
-- 同 tick 同乐器的和弦**必须保留**；去重只按 `(tick, 乐器, 音高)`。
-- 音域：`use-count = MIDI − 乐器基准 ∈ [0,24]`（见 `references/pitch.md`）。超界优先换八度合适的乐器，
-  仍超就升降八度并**记录到交付说明**。MC 同时发声上限 255，实测峰值 4–8，很安全。
+- Lead melody: `pling` (bright electric piano) / `flute` (high-octave supplement) / `bit` (synth) / `harp` (warm midrange).
+  **A single instrument spans only 25 semitones**; if the span is wider, split it by register or fold an octave (both get recorded in the report).
+- Bass: `bass`; chords: `guitar` / `banjo`; high accents: `bell` / `chime` / `xylophone`;
+  for brass use only the `trumpet` family on 26.1+. Head instruments (1.20+) have no notion of pitch and **must never be used for melody**.
+- Default mix volumes (calibrated by ear): lead vocal/accompaniment 1.0, bass 1.0, bit 0.5, kick 0.6, snare 0.5, hi-hat 0.25.
+  **Drums should err on the quiet side** — dense hi-hats at 0.5 will drown the whole song.
+- Chords on the same tick with the same instrument **must be kept**; dedup is only by `(tick, instrument, pitch)`.
+- Pitch range: `use-count = MIDI − instrument base ∈ [0,24]` (see `references/pitch.md`). When out of range, prefer switching to an instrument whose octave fits; if it still does not fit, shift by an octave and **record it in the delivery notes**. MC's simultaneous-sound cap is 255, and the measured peak is 4–8, comfortably safe.
 
-## 第四步：写出 song.json
+## Step 4: write song.json
 
-Schema 见 `references/format_spec.md` §B，骨架见 `templates/song.template.json`。
-`meta.mc_version` 填用户版本；`time_unit` 用 `nbs_s_units` + `speed`（默认 80）。
+For the schema see `references/format_spec.md` §B, for the skeleton `templates/song.template.json`.
+Set `meta.mc_version` to the user's version; use `time_unit` = `nbs_s_units` + `speed` (default 80).
 
-## 第五步：生成与自检
+## Step 5: generate and self-check
 
 ```bash
-python3 scripts/generate.py song.json -o out/music/<歌名>          # lemon 兼容交付物
-python3 scripts/make_datapack.py song.json -o out/<歌名> --mc-version <版本>   # 独立数据包 + zip
-python3 scripts/validate_pack.py --pack out/<歌名> --namespace <ns> --song <歌名> \
-    --song-id <id> --speed 80 --mc-version <版本>
+python3 scripts/generate.py song.json -o out/music/<song name>          # lemon-compatible deliverable
+python3 scripts/make_datapack.py song.json -o out/<song name> --mc-version <version>   # standalone datapack + zip
+python3 scripts/validate_pack.py --pack out/<song name> --namespace <ns> --song <song name> \
+    --song-id <id> --speed 80 --mc-version <version>
 ```
 
-自检清单（`validate_pack.py` 会全部覆盖）：
+Self-check list (`validate_pack.py` covers all of it):
 
-- **每个 `notes/<t>.mcfunction` 被 tree 恰好引用 1 次**——叶子必须 **1 格宽**；2 格宽叶子会让相邻 tick 对
-  `(2k,2k+1)` 里第二个 tick 的文件没人调用（**永久静音**），还会让音符早响 1 个游戏 tick。
-  细节与实测数据见 `references/format_spec.md` §A。
-- 树节点全部从根可达、无悬空子节点；`tick.mcfunction` 的树根名与 tree/ 一致。
-- 乐器在版本白名单内、`pitch ∈ [0.5, 2.0]`、`use-count ∈ [0,24]`。
-- `play/stop/tick` 的 `song_id` 一致；末 tick 接 `stop`；所有 `.mcfunction` 为 CRLF。
-- 独立模式：目录名按 `function`/`functions` 分水岭、pack.mcmeta 按版本选写法、tick/load 标签路径正确。
+- **Every `notes/<t>.mcfunction` is referenced exactly once by the tree** — a leaf must be **1 block wide**; a 2-block-wide leaf leaves the second tick's file in an adjacent tick pair `(2k,2k+1)` called by nobody (**permanently silent**), and also makes notes fire 1 game tick early.
+  For details and measured data see `references/format_spec.md` §A.
+- All tree nodes are reachable from the root and there are no dangling child nodes; the tree root name in `tick.mcfunction` matches tree/.
+- Instruments are inside the version whitelist, `pitch ∈ [0.5, 2.0]`, `use-count ∈ [0,24]`.
+- The `song_id` matches across `play/stop/tick`; the last tick chains into `stop`; every `.mcfunction` is CRLF.
+- Standalone mode: the directory name follows the `function`/`functions` boundary, pack.mcmeta follows the version-appropriate syntax, and the tick/load tag paths are correct.
 
-## 第六步：交付
+## Step 6: delivery
 
-- **独立数据包**：`make_datapack.py` 产出的 zip 丢进 `datapacks/` → `/reload` →
-  `/function <ns>:<path>/play`；给玩家打 `no_music` 标签即静音。
-- **装进红石音乐盒**：`python3 scripts/add_to_musicbox.py --box <盒子目录> --song song.json --name "歌名" [--lrc 歌词.lrc]`
-  → `/reload`。盒子提供唱片机（左键上一首 / 连击长按暂停 / 右键下一首 / 双击右键菜单）、`/trigger lrc` 歌词、
-  `/trigger play set <编号>` 点歌、维度禁播。详见 `examples/musicbox/README.md`。
-- **lemon 兼容**：交付 `<歌名>/` 文件夹（play/stop/tick/tree/notes）+ 集成说明：放进
-  `data/<ns>/function/`（1.21+）或 `functions/`（≤1.20.4）；确认宿主每刻执行本曲 `tick`、
-  `#speed nbs_s = 80`、`song_id` 不冲突。**不要**带 `pack.mcmeta` / `init` / `tags` 进宿主包。
-- 附上 `song.json` + 编曲决策说明（`--report` 自动生成）+ 试听 wav（可选）。
-- 交付说明里写清：`#speed` 假设、是否用了 `/tick rate`、折了哪些八度、**验证到了哪一步**。
+- **Standalone datapack**: drop the zip produced by `make_datapack.py` into `datapacks/` → `/reload` →
+  `/function <ns>:<path>/play`; give a player the `no_music` tag to mute it.
+- **Install into the Redstone Music Box**: `python3 scripts/add_to_musicbox.py --box <box dir> --song song.json --name "<song name>" [--lrc lyrics.lrc]`
+  → `/reload`. The box provides the jukebox (left click = previous song / press-and-hold = pause / right click = next song / double right click = menu), `/trigger lrc` lyrics,
+  `/trigger play set <id>` song selection, and per-dimension playback bans. See `examples/musicbox/README.md` for details.
+- **lemon-compatible**: deliver the `<song name>/` folder (play/stop/tick/tree/notes) plus integration notes: put it into
+  `data/<ns>/function/` (1.21+) or `functions/` (≤1.20.4); confirm the host runs this song's `tick` every tick,
+  that `#speed nbs_s = 80`, and that `song_id` does not collide. **Do not** bring `pack.mcmeta` / `init` / `tags` into the host pack.
+- Attach `song.json` + the arrangement decision notes (auto-generated by `--report`) + the preview wav (optional).
+- State clearly in the delivery notes: the `#speed` assumption, whether `/tick rate` was used, which octaves were folded, and **how far verification went**.
 
-## 版本地形速查（决定"这一版能打到什么程度"）
+## Version terrain quick reference (decides "how far this version can go")
 
-| 版本 | 目录名 | pack.mcmeta | 乐器数 | `/tick rate` 精度进阶 |
+| Version | Directory name | pack.mcmeta | Instrument count | `/tick rate` precision upgrade |
 |---|---|---|---|---|
-| 1.13 | `functions/` | `pack_format` | 10 | 无（1.20.3 才有） |
-| 1.14–1.20.2 | `functions/` | `pack_format` | 16 | 无 |
-| 1.20.3–1.20.6 | `functions/` | `pack_format` | 16 | ✅ 可 `/tick rate 80`（网格 12.5 ms） |
-| 1.21–1.21.8 | `function/`（单数!） | `pack_format` | 16 | ✅ |
-| ≥1.21.9（含 26.x） | `function/` | **`min_format`/`max_format` = `[主,次]`**，不能写 `pack_format`、不能写小数 `107.1` | 16（26.1+ 多 4 种铜管） | ✅ |
+| 1.13 | `functions/` | `pack_format` | 10 | none (only from 1.20.3) |
+| 1.14–1.20.2 | `functions/` | `pack_format` | 16 | none |
+| 1.20.3–1.20.6 | `functions/` | `pack_format` | 16 | ✅ `/tick rate 80` works (grid 12.5 ms) |
+| 1.21–1.21.8 | `function/` (singular!) | `pack_format` | 16 | ✅ |
+| ≥1.21.9 (incl. 26.x) | `function/` | **`min_format`/`max_format` = `[major,minor]`**, cannot use `pack_format`, cannot use a decimal `107.1` | 16 (26.1+ has 4 more brass instruments) | ✅ |
 
-完整格式数字表与两代写法：`references/datapack.md`。`make_datapack.py` 会按版本自动选对。
+Full format number table and the two generations of syntax: `references/datapack.md`. `make_datapack.py` picks the right one automatically per version.
 
-## 参考文件
+## Reference files
 
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| `references/format_spec.md` | 产物规范（play/stop/tick/tree/notes 逐行规则）+ song.json schema + 手工生成备忘 |
-| `references/instruments.md` | 乐器白名单（版本/音域/底部方块/音效事件） |
-| `references/pitch.md` | `use-count ↔ /playsound pitch` 换算表 |
-| `references/datapack.md` | pack_format 全表、两代 pack.mcmeta 写法、目录分水岭、运行时事实 |
-| `references/midi_notes.md` | MIDI 解析实战坑、BPM 对齐、混音音量、**交付前一致性自检** |
-| `references/troubleshooting.md` | 从"没声音"到"能听"的症状→原因→修法 |
-| `references/recipes.md` | 常用配方：接入 lemon 宿主、接歌链、多曲共存、**/tick rate 精度进阶**、/schedule 备选引擎 |
-| `templates/` | song.json 骨架 + 独立数据包骨架（手拼时用） |
-| `examples/musicbox/` | **红石音乐盒通用框架**（不含歌曲）：唱片机 + 点歌菜单 + 歌词 + 维度禁播；用 `add_to_musicbox.py` 注册歌曲 |
-| `examples/demo.mid` | 8 小节示例 MIDI，用来快速验证工具链 |
+| `references/format_spec.md` | Output specification (line-by-line rules for play/stop/tick/tree/notes) + song.json schema + manual generation notes |
+| `references/instruments.md` | Instrument whitelist (version/pitch range/bottom block/sound event) |
+| `references/pitch.md` | `use-count ↔ /playsound pitch` conversion table |
+| `references/datapack.md` | Full pack_format table, two generations of pack.mcmeta syntax, directory-naming boundary, runtime facts |
+| `references/midi_notes.md` | MIDI parsing field traps, BPM alignment, mix volumes, **consistency self-check before delivery** |
+| `references/troubleshooting.md` | Symptom → cause → fix, from "no sound" to "it plays" |
+| `references/recipes.md` | Common recipes: integrating into a lemon host, song chaining, multiple songs coexisting, **the /tick rate precision upgrade**, /schedule as an alternative engine |
+| `templates/` | song.json skeleton + standalone datapack skeleton (for hand assembly) |
+| `examples/musicbox/` | **The Redstone Music Box general framework** (no songs included): jukebox + song menu + lyrics + per-dimension playback ban; register songs with `add_to_musicbox.py` |
+| `examples/demo.mid` | An 8-bar sample MIDI for quickly validating the toolchain |
 
-## 参考产物与自检
+## Reference artifacts and self-check
 
-- `examples/musicbox/`：**通用框架数据包**（不含歌曲），也可当"产物该长什么样"的对照；
-  它是从同作者的成品包 v3 抽出来的，交互机制一致。
-- `tests/smoke_test.py`：端到端回归测试（含"2 格宽叶子必须被抓出来"的回归用例，以及"把歌曲注册进音乐盒"的全流程）；
-  `python3 tests/smoke_test.py` 应输出 `SMOKE TEST PASSED`。
-- 出问题先跑 `python3 scripts/doctor.py --pack <包>`。
+- `examples/musicbox/`: a **general framework datapack** (songs not included), also usable as a comparison for "what the output should look like";
+  it was extracted from the same author's finished v3 pack, with identical interaction mechanics.
+- `tests/smoke_test.py`: end-to-end regression test (including the regression case "a 2-block-wide leaf must be caught", and the whole flow of "registering a song into the music box");
+  `python3 tests/smoke_test.py` should print `SMOKE TEST PASSED`.
+- When something goes wrong, first run `python3 scripts/doctor.py --pack <pack>`.

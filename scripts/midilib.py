@@ -1,39 +1,43 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""MIDI 读取库（scan_midi.py / midi_to_song.py 共用）。
+"""MIDI reader library (shared by scan_midi.py / midi_to_song.py).
 
-按 references/midi_notes.md 的实战经验实现：
-  - **只数 note-on**（0x90 vel>0），不依赖 note-on/off 配对 —— 配对式解析器遇到同音高重叠会互相覆盖，
-    音符数大幅少计并产生"粘住音符"；音符盒只要 onset，时长无用。
-  - **不信任 header 的 format 字段**，按 chunk 顺序解析（format 0 带多个 MTrk 是非法但真实存在的）。
-  - **按轨道名（FF 03）路由声部**，不按下标 —— 删一条轨后下标全变，名字不变。
-  - varlen 续字节最高位 = 1；running status 沿用上一个状态字节，F0/F7 之后清零。
+Implemented from the field-tested lessons in references/midi_notes.md:
+  - **Count note-on only** (0x90 vel>0), never relying on note-on/off pairing -- a pairing parser
+    overwrites overlapping notes of the same pitch, badly undercounting notes and producing
+    "stuck notes"; a note block only needs onsets, duration is useless.
+  - **Do not trust the header's format field**; parse by chunk order instead (format 0 with
+    several MTrk chunks is illegal but does occur in the wild).
+  - **Route parts by track name (FF 03)**, not by index -- deleting one track shifts every index,
+    but the names stay the same.
+  - varlen continuation byte has the top bit set; running status reuses the previous status byte
+    and is cleared after F0/F7.
 
-仅用标准库。被 import 时不产生输出。
+Standard library only. Produces no output when imported.
 """
 import struct
 
 __all__ = ["Note", "Track", "Midi", "read_midi", "gm_drum_name", "GM_DRUMS"]
 
-# GM 打击乐音高 → 名称（用于 scan_midi 报告与 midi_to_song 的鼓映射说明）
+# GM percussion pitch -> name (used by the scan_midi report and midi_to_song's drum mapping notes)
 GM_DRUMS = {
-    35: "底鼓(acoustic bass drum)", 36: "底鼓", 37: "边击(side stick)",
-    38: "军鼓", 39: "拍手(hand clap)", 40: "军鼓(electric snare)",
-    41: "低音桶鼓", 42: "闭合踩镲", 43: "高音桶鼓", 44: "踏板踩镲",
-    45: "中音桶鼓", 46: "开放踩镲", 47: "中低桶鼓", 48: "中高桶鼓",
-    49: "叮镲(crash)", 50: "高音桶鼓", 51: "叮点镲(ride)", 52: "中国镲",
-    53: "铃铛(ride bell)", 54: "铃鼓", 55: "飞溅镲", 56: "牛铃",
-    57: "叮镲2(crash2)", 58: "振动铃", 59: "叮点镲2(ride2)", 60: "高音邦戈",
-    61: "低音邦戈", 62: "高音康加", 63: "低音康加", 64: "高音定音鼓",
+    35: "acoustic bass drum", 36: "bass drum", 37: "side stick",
+    38: "snare", 39: "hand clap", 40: "electric snare",
+    41: "low tom", 42: "closed hi-hat", 43: "high tom", 44: "pedal hi-hat",
+    45: "mid tom", 46: "open hi-hat", 47: "low-mid tom", 48: "high-mid tom",
+    49: "crash cymbal", 50: "high tom", 51: "ride cymbal", 52: "china cymbal",
+    53: "ride bell", 54: "tambourine", 55: "splash cymbal", 56: "cowbell",
+    57: "crash cymbal 2", 58: "vibraslap", 59: "ride cymbal 2", 60: "hi bongo",
+    61: "low bongo", 62: "hi conga", 63: "low conga", 64: "high timbale",
 }
 
 
 def gm_drum_name(pitch):
-    return GM_DRUMS.get(pitch, "打击乐 %d" % pitch)
+    return GM_DRUMS.get(pitch, "percussion %d" % pitch)
 
 
 class Note(object):
-    """一个 note-on。tick = MIDI tick；vel = 力度(1-127)。"""
+    """One note-on. tick = MIDI tick; vel = velocity (1-127)."""
 
     __slots__ = ("tick", "pitch", "vel", "chan")
 
@@ -76,7 +80,7 @@ class Midi(object):
         self.tracks = []
         self.tempos = [(0, 500000)]      # [(tick, us_per_quarter)]
 
-    # ---------- 时间换算 ----------
+    # ---------- time conversion ----------
     def us_at(self, tick):
         us = self.tempos[0][1]
         for tk, u in self.tempos:
@@ -89,7 +93,7 @@ class Midi(object):
         return 60e6 / self.us_at(tick)
 
     def sec_at(self, tick):
-        """tick → 秒（按 tempo map 分段积分）。"""
+        """tick -> seconds (piecewise integration over the tempo map)."""
         s = 0.0
         last = 0
         us = self.tempos[0][1]
@@ -123,17 +127,17 @@ def _read_varlen(b, i):
 
 
 def read_midi(path):
-    """解析 MIDI 文件，返回 Midi 对象。非法但常见的结构也尽量容错。"""
+    """Parse a MIDI file and return a Midi object. Tolerates illegal but common structures."""
     b = open(path, "rb").read()
     if b[:4] != b"MThd":
-        raise ValueError("不是 MIDI 文件（缺少 MThd）：%s" % path)
+        raise ValueError("not a MIDI file (missing MThd): %s" % path)
     hlen = struct.unpack(">I", b[4:8])[0]
     m = Midi(path)
     m.fmt = struct.unpack(">H", b[8:10])[0]
     m.declared_ntrks = struct.unpack(">H", b[10:12])[0]
     div = struct.unpack(">H", b[12:14])[0]
     if div & 0x8000:
-        raise ValueError("SMPTE 时间制式（division=0x%04x）暂不支持，请在 DAW 里另存为 PPQ 制式" % div)
+        raise ValueError("SMPTE time division (division=0x%04x) is not supported yet; re-save as PPQ in your DAW" % div)
     m.division = div or 480
 
     pos = 8 + hlen
@@ -176,7 +180,7 @@ def read_midi(path):
             elif status in (0xF0, 0xF7):
                 ln, i = _read_varlen(data, i)
                 i += ln
-                status = None                      # SysEx 之后 running status 清零
+                status = None                      # running status is cleared after SysEx
             else:
                 hi = status & 0xF0
                 ch = status & 0x0F
@@ -185,7 +189,7 @@ def read_midi(path):
                 i += n
                 if len(d) < n:
                     break
-                if hi == 0x90 and d[1] > 0:        # 只认 note-on
+                if hi == 0x90 and d[1] > 0:        # accept note-on only
                     tr.notes.append(Note(tick, d[0], d[1], ch))
                     tr.channels.add(ch)
                 elif hi == 0x80:
@@ -196,7 +200,7 @@ def read_midi(path):
                     tr.control.append((tick, d[0], d[1]))
         m.tracks.append(tr)
 
-    # tempo map 去重排序
+    # dedupe and sort the tempo map
     seen = set()
     tmap = []
     for tk, u in sorted(m.tempos):

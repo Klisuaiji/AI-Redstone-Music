@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# song.json → lemon 风格 mcfunction（算法已对 lemon 参考包逆向验证）
+# song.json → lemon-style mcfunction (algorithm reverse-verified against the lemon reference pack)
 import json, os, sys, argparse
 
 INSTRUMENTS = {
@@ -59,17 +59,17 @@ def main():
         for n in tr["notes"]:
             raw = n["t"]*scale; t = round(raw)
             if abs(raw-t) > 1e-6:
-                sys.exit("时间 %s 换算非整数(%s)，请调整 tempo/speed 或量化" % (n["t"], raw))
+                sys.exit("time %s does not convert to a whole number (%s); adjust tempo/speed or quantize" % (n["t"], raw))
             inst = n.get("inst", dinst)
-            if inst not in INSTRUMENTS: sys.exit("未知乐器: "+inst)
+            if inst not in INSTRUMENTS: sys.exit("unknown instrument: "+inst)
             if vt(ver) < vt(INSTRUMENTS[inst]["min"]):
-                sys.exit("乐器 %s 需 MC %s+（目标 %s）" % (inst, INSTRUMENTS[inst]["min"], ver))
+                sys.exit("instrument %s needs MC %s+ (target %s)" % (inst, INSTRUMENTS[inst]["min"], ver))
             uc = n["midi"] - INSTRUMENTS[inst]["base"]
             if not 0 <= uc <= 24:
-                warns.append("t=%s %s 音域外(uc=%d)已夹取" % (n["t"], inst, uc)); uc = min(24,max(0,uc))
-            if inst in HEADS: warns.append("t=%s 头颅乐器无视pitch" % n["t"])
+                warns.append("t=%s %s out of pitch range (uc=%d), clamped" % (n["t"], inst, uc)); uc = min(24,max(0,uc))
+            if inst in HEADS: warns.append("t=%s head instrument ignores pitch" % n["t"])
             events.setdefault(t,[]).append((INSTRUMENTS[inst]["sound"], "%.6f"%pitch_of(uc), n.get("vol",1.0)))
-    if not events: sys.exit("没有音符！")
+    if not events: sys.exit("no notes!")
 
     ticks = sorted(events); maxt = ticks[-1]
     N = 1
@@ -80,11 +80,12 @@ def main():
         rng = [t for t in ntset if x <= t <= y]
         if not rng: return None
         name = "%d_%d" % (x, y)
-        # 叶子必须 1 格宽（y == x，详见 references/format_spec.md §A）。
-        # 若写成 y-x<=1，叶子只输出 rng[0]；而二分出的最深层叶子恒为对齐的 [2k,2k+1]，
-        # 于是相邻 tick 对 (2k,2k+1) 同时有音符时，2k+1 的 notes/<t>.mcfunction 会生成
-        # 却没有任何节点调用它 → 该音符永久静音（实测某曲 1169 个 notes 里 79 个不可达）。
-        if y == x:  # 叶子
+        # A leaf must be 1 wide (y == x; see references/format_spec.md §A).
+        # With y-x<=1 a leaf only outputs rng[0]; the deepest leaf produced by the bisection is
+        # always an aligned [2k,2k+1], so when the adjacent tick pair (2k,2k+1) both have notes,
+        # notes/<t>.mcfunction for 2k+1 is generated but no node calls it → that note is silent
+        # forever (measured on one song: 79 of 1169 notes unreachable).
+        if y == x:  # leaf
             t = rng[0]; guard = "-1" if t == 0 else str(t-1)
             tree[name] = ("execute if score music_progress nbs_s matches %d..%d "
                           "if score music_progress nbs_t matches ..%s run function %s:%s/notes/%d"
@@ -120,6 +121,6 @@ def main():
         w("_standalone_init.mcfunction", "scoreboard objectives add music_type dummy\nscoreboard objectives add nbs_s dummy\nscoreboard objectives add nbs_t dummy\nscoreboard players set #speed nbs_s %d\n" % speed)
         w("_standalone_tick.mcfunction", "function %s:%s/tick\n" % (ns, path))
     for x in warns: print("WARN:", x, file=sys.stderr)
-    print("OK: %d 音符tick / %d 树节点 / 根 %s → %s" % (len(ticks), len(tree), root, a.out))
+    print("OK: %d note ticks / %d tree nodes / root %s → %s" % (len(ticks), len(tree), root, a.out))
 
 if __name__ == "__main__": main()

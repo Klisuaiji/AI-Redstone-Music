@@ -1,6 +1,6 @@
 {
     "replace": false,
     "values": [
-        "<命名空间>:music/<歌名>/tick"
+        "<namespace>:music/<song>/tick"
     ]
 }

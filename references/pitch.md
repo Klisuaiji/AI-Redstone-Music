@@ -1,11 +1,11 @@
-# 音高换算
-- use-count n ∈ [0,24]；/playsound pitch = 2^((n-12)/12)；n=12 → 1.0（F#4）
-- MC 实测钳制：pitch < 0.5 等同 0.5，> 2.0 等同 2.0 —— 超出必须移八度，不能依赖钳制
-- 音符换算：use-count = MIDI − 乐器基准（instruments.md 的 base 列）
-- 有效音域合计 F#1–F#7（72 半音）：低 2 八度 bass/didgeridoo；低 1 八度 guitar/trumpet_weathered/oxidized；
-  标准 harp/pling/bit/banjo/iron_xylophone/cow_bell/trumpet/trumpet_exposed；高 1 八度 flute；高 2 八度 bell/chime/xylophone
+# Pitch conversion
+- use-count n ∈ [0,24]; /playsound pitch = 2^((n-12)/12); n=12 → 1.0 (F#4)
+- MC measured clamp: pitch < 0.5 counts as 0.5, > 2.0 counts as 2.0 — anything outside must be shifted an octave, you cannot rely on the clamp
+- Note conversion: use-count = MIDI − instrument base (the base column in instruments.md)
+- Combined effective pitch range F#1–F#7 (72 semitones): low 2 octaves bass/didgeridoo; low 1 octave guitar/trumpet_weathered/oxidized;
+  standard harp/pling/bit/banjo/iron_xylophone/cow_bell/trumpet/trumpet_exposed; high 1 octave flute; high 2 octaves bell/chime/xylophone
 
-| n | 音名 | pitch | | n | 音名 | pitch |
+| n | Note name | pitch | | n | Note name | pitch |
 |---|---|---|---|---|---|---|
 | 0 | F#3 | 0.5 | | 12 | F#4 | 1.0 |
 | 1 | G3 | 0.529732 | | 13 | G4 | 1.059463 |

@@ -1,2 +1,2 @@
-# 一首播完时由歌曲的 stop.mcfunction 链式调用（song.json 里设 next_song: "rmb:song/ended"）
+# Chained from the song's stop.mcfunction when a song finishes (set next_song: "rmb:song/ended" in song.json)
 function rmb:box/next

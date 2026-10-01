@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""数据包通用静态检查（不需要启动 Minecraft）。
+"""Generic static check for a datapack (does not need Minecraft running).
 
-和 `validate_pack.py` 的分工：`validate_pack.py` 只认本工作流生成的**歌曲数据包**（检查树/音符/时轴），
-`check_refs.py` 认**任何**数据包，做的是"改完别把包改坏"的基础体检：
+Division of labour with `validate_pack.py`: `validate_pack.py` only understands the **song datapacks**
+this workflow generates (it checks tree/notes/timeline), while `check_refs.py` accepts **any** datapack
+and does the basic health check that you did not break the pack while editing:
 
-  * 每个 `function <命名空间>:<路径>` 引用的 .mcfunction 是否真的存在（最容易犯、且只在游戏里报错的错）
-  * `data/**/*.json` 是否都是合法 JSON
-  * `.mcfunction` 是否都是 CRLF 行尾（Windows 记事本改过之后常见）
-  * 提示哪些函数用了宏（`$` 开头），它们需要 `with storage/entity/block` 或 `/function <名> {数据}` 调用
+  * does every .mcfunction referenced by `function <namespace>:<path>` really exist
+    (the easiest mistake to make, and one that only errors inside the game)
+  * is every `data/**/*.json` valid JSON
+  * do all `.mcfunction` files use CRLF line endings (common after editing in Windows notepad)
+  * which functions use macros (lines starting with `$`); those need to be called with
+    `with storage/entity/block` or `/function <name> {data}`
 
-用法：
-    python3 scripts/check_refs.py <数据包根目录>
+Usage:
+    python3 scripts/check_refs.py <datapack root>
     python3 scripts/check_refs.py examples/musicbox/datapack
 
-全部通过退出码 0，否则 1。仅用标准库。
+Exit code 0 if everything passes, otherwise 1. Standard library only.
 """
 import json, os, re, sys
 
@@ -28,10 +31,10 @@ FN_RE = re.compile(r"(?:^|[\s\[])(?:run )?function ([a-z0-9_.-]+):([a-z0-9_./-]+
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit("用法: check_refs.py <数据包根目录>")
+        sys.exit("usage: check_refs.py <datapack root>")
     root = sys.argv[1]
     if not os.path.isfile(os.path.join(root, "pack.mcmeta")):
-        print("提示: %s 里没有 pack.mcmeta —— 仍在继续检查引用" % root)
+        print("note: %s has no pack.mcmeta — still checking references" % root)
 
     missing, macros, badjson, badcrlf = [], [], [], []
     files = set()
@@ -59,25 +62,25 @@ def main():
             macros.append(rel)
 
     n_mc = sum(1 for f in files if f.endswith(".mcfunction"))
-    print("文件总数: %d（其中 mcfunction %d）" % (len(files), n_mc))
-    print("宏函数（含 $ 行）: %s" % (", ".join(sorted(macros)) or "无"))
+    print("total files: %d (%d mcfunction)" % (len(files), n_mc))
+    print("macro functions (with $ lines): %s" % (", ".join(sorted(macros)) or "none"))
 
     ok = True
     if missing:
         ok = False
-        print("\n[FAIL] 引用了不存在的函数 %d 处:" % len(missing))
+        print("\n[FAIL] %d references to functions that do not exist:" % len(missing))
         for m in missing[:30]:
             print("   ", m)
     if badjson:
         ok = False
-        print("\n[FAIL] JSON 不合法:")
+        print("\n[FAIL] invalid JSON:")
         for m in badjson:
             print("   ", m)
     if badcrlf:
         ok = False
-        print("\n[FAIL] 非 CRLF 行尾的 mcfunction: %s" % ", ".join(badcrlf))
+        print("\n[FAIL] mcfunction with non-CRLF line endings: %s" % ", ".join(badcrlf))
     if ok:
-        print("\nOK: 所有函数引用都能解析，JSON 合法，行尾正确")
+        print("\nOK: every function reference resolves, JSON is valid, line endings are correct")
     return 0 if ok else 1
 
 

@@ -1,115 +1,115 @@
-# 常用配方
+# Common recipes
 
-每个配方都是"照着做就能得到结果"的完整流程。工具清单见 `SKILL.md`。
+Each recipe is a complete "follow it and you get the result" procedure. See `SKILL.md` for the tool list.
 
 ---
 
-## 1. 从 MIDI 到可安装数据包（一条龙）
+## 1. From MIDI to an installable datapack (all in one go)
 
 ```bash
-python3 scripts/scan_midi.py 歌曲.mid                       # 1. 体检：声部/音域/网格/判定
-python3 scripts/midi_to_song.py 歌曲.mid -o song.json \      # 2. 自动编曲 + 决策报告
-    --name mysong --song-id 9 --mc-version 26.2 --report 编曲说明.md
-python3 scripts/render_preview.py song.json -o preview.wav   # 3. 先听一遍（不用开游戏）
-python3 scripts/make_datapack.py song.json -o out/mysong \   # 4. 组装数据包 + zip
+python3 scripts/scan_midi.py song.mid                       # 1. health check: parts/pitch range/grid/verdict
+python3 scripts/midi_to_song.py song.mid -o song.json \      # 2. automatic arrangement + decision report
+    --name mysong --song-id 9 --mc-version 26.2 --report arrangement_notes.md
+python3 scripts/render_preview.py song.json -o preview.wav   # 3. preview once (no need to open the game)
+python3 scripts/make_datapack.py song.json -o out/mysong \   # 4. assemble the datapack + zip
     --mc-version 26.2
-python3 scripts/validate_pack.py --pack out/mysong \         # 5. 硬门禁
+python3 scripts/validate_pack.py --pack out/mysong \         # 5. hard gate
     --namespace minecraft --song mysong --song-id 9 --speed 80 --mc-version 26.2
 ```
 
-装进存档 `datapacks/` → `/reload` → `/function minecraft:music/mysong/play`。
+Install into the save's `datapacks/` → `/reload` → `/function minecraft:music/mysong/play`.
 
-## 2. 接入已有的 lemon 系宿主数据包
+## 2. Integrating into an existing lemon-family host datapack
 
-适用：用户已经有一个音乐数据包，每刻执行各曲 `tick`，用 `music_type` 选曲。
+Applies to: the user already has a music datapack that runs each song's `tick` every tick and selects songs with `music_type`.
 
-1. `midi_to_song.py ... --style lemon`（或生成后不管 `style`，反正只取歌曲文件夹）
-2. `python3 scripts/generate.py song.json -o out/music/<歌名>`
-3. 把 `out/music/<歌名>/` 整个复制进宿主包 `data/<宿主命名空间>/function/music/` 下
-   （1.20.4 及以下用 `functions/`）
-4. 三个条件必须与宿主一致，否则整曲静默失效：
-   - 宿主的 `#speed nbs_s` 必须 = **80**（`/scoreboard players get #speed nbs_s`）
-   - `song_id` 不能与宿主已有曲目冲突（`lemon` 原包占 8）
-   - 宿主每刻要执行 `function <ns>:music/<歌名>/tick`
-5. **不要**把本曲的 `init.mcfunction`、`pack.mcmeta`、`tags/` 带进宿主包。
+1. `midi_to_song.py ... --style lemon` (or ignore `style` after generation, since only the song folder is taken)
+2. `python3 scripts/generate.py song.json -o out/music/<song name>`
+3. Copy all of `out/music/<song name>/` into the host pack under `data/<host namespace>/function/music/`
+   (1.20.4 and below use `functions/`)
+4. Three conditions must match the host, otherwise the whole song silently fails:
+   - the host's `#speed nbs_s` must = **80** (`/scoreboard players get #speed nbs_s`)
+   - `song_id` must not conflict with songs the host already has (`lemon` itself occupies 8)
+   - the host must run `function <ns>:music/<song name>/tick` every tick
+5. Do **not** bring this song's `init.mcfunction`, `pack.mcmeta` or `tags/` into the host pack.
 
-> 只交付歌曲文件夹时，`validate_pack.py --pack <歌曲文件夹>` 也能自检（不会要求 `pack.mcmeta`）。
+> When delivering only the song folder, `validate_pack.py --pack <song folder>` can self-check too (it does not require `pack.mcmeta`).
 
-## 3. 接歌链（播完自动下一首）
+## 3. Song chaining (automatically play the next song when one finishes)
 
-在 `song.json` 里设 `"next_song": "minecraft:music/下一首/play"`，生成的 `stop.mcfunction` 末尾会带
-`function minecraft:music/下一首/play`。改单曲时**不要**动宿主的 `main`/`tick` 标签。
+Set `"next_song": "minecraft:music/<next song>/play"` in `song.json`, and the generated `stop.mcfunction` will end with
+`function minecraft:music/<next song>/play`. When modifying a single song, do **not** touch the host's `main`/`tick` tags.
 
-## 4. 多首曲子共存 / 菜单
+## 4. Multiple songs coexisting / a menu
 
-- 每首曲子一个 `song_id`、一个 `path`，互不干扰；同一时刻只播放一首（同时播会混音）。
-- 选曲就是给假玩家 `music_progress` 的 `music_type` 赋值：`/scoreboard players set music_progress music_type <id>`；
-  `play.mcfunction` 做的就是这件事 + 把 `nbs_s` 归零、`nbs_t` 复位。
-- 想做菜单/唱片机交互（右键切歌、暂停、歌词），参考成品包 `examples/RedstoneMusicBox-v3.zip` 的
-  `data/minecraft/function/music/box/` 那一套。
+- Each song gets one `song_id` and one `path`, independent of the others; only one plays at a time (playing several at once mixes them).
+- Selecting a song means assigning to the `music_type` of the fake player `music_progress`: `/scoreboard players set music_progress music_type <id>`;
+  that is exactly what `play.mcfunction` does, plus zeroing `nbs_s` and resetting `nbs_t`.
+- For menu/jukebox interaction (right-click to change songs, pause, lyrics), see the
+  `data/minecraft/function/music/box/` set in the finished pack `examples/RedstoneMusicBox-v3.zip`.
 
-## 5. 精度进阶：用 `/tick rate` 把时间网格细化 4 倍
+## 5. Advanced precision: using `/tick rate` to refine the time grid 4×
 
-本工作流的网格是"1 个 t = 1 个游戏 tick"。原版 20 tps 下 = **50 ms**，所以 144 BPM 的十六分音符
-（104.17 ms）只能量化到 2 或 3 个 tick，最大误差 **25 ms**（半个 tick，物理下限）。
+This workflow's grid is "1 t = 1 game tick". At vanilla 20 tps that is **50 ms**, so a 144 BPM sixteenth note
+(104.17 ms) can only be quantized to 2 or 3 ticks, with a maximum error of **25 ms** (half a tick, the physical floor).
 
-**MC 1.20.3+ 有 `/tick rate`**，把世界跑到 80 tps 后，同样 `#speed 80` 的约定下 **1 个 t = 12.5 ms**，
-量化误差同样缩小 4 倍：
+**MC 1.20.3+ has `/tick rate`**; running the world at 80 tps gives **1 t = 12.5 ms** under the same `#speed 80` convention, and the
+quantization error shrinks by the same 4×:
 
 ```bash
-python3 scripts/midi_to_song.py 歌曲.mid -o song.json --tick-rate 80 --name mysong --song-id 9
-# 实测（144 BPM 的 166 秒曲子）：最大量化误差 25.0 ms → 4.6 ms
+python3 scripts/midi_to_song.py song.mid -o song.json --tick-rate 80 --name mysong --song-id 9
+# measured (a 166-second song at 144 BPM): maximum quantization error 25.0 ms → 4.6 ms
 ```
 
-进游戏必须**手动**敲一次 `/tick rate 80`（本工作流不会、也不该替你改全局设置）：
+In game you must type `/tick rate 80` **manually** once (this workflow will not, and should not, change global settings for you):
 
-| 必须告知用户的事 | 说明 |
+| Things you must tell the user | Explanation |
 |---|---|
-| 这是**全世界加速** | 红石、生物 AI、作物生长、刷怪全部一起变快 |
-| **不跨会话保留** | 退出重进世界就回到 20，每次都要重敲；忘了敲 = 整曲慢 4 倍 |
-| 服务器扛不住会漂 | 日志出现 `Can't keep up!` 时实际 TPS 已经掉下来了 |
-| 用完记得 `/tick rate 20` | 恢复原速 |
+| this speeds up the **whole world** | redstone, mob AI, crop growth and mob spawning all get faster together |
+| **not preserved across sessions** | quitting and rejoining the world returns to 20, so it must be retyped every time; forgetting = the whole song is 4× slower |
+| a server that cannot keep up will drift | when the log shows `Can't keep up!` the actual TPS has already dropped |
+| remember `/tick rate 20` afterwards | restore the original speed |
 
-生产建议：**默认 20 tps 出包**（谁都能放），把 80 tps 当成"用户明确要精度时"的进阶选项。
+Production advice: **ship packs at 20 tps by default** (anyone can load them), and treat 80 tps as an advanced option "for when the user explicitly asks for precision".
 
-## 6. 不想用树？直接用 `/schedule` 排程（备选播放引擎）
+## 6. Do not want the tree? Schedule directly with `/schedule` (an alternative playback engine)
 
-树的优点是与 lemon 系宿主完全兼容、每刻只走一条分支。若你只要**独立数据包**且想省掉每刻开销，
-可以在生成后用 `/schedule` 直接排程（**1.14+** 才有；本仓库未自动化，属手工进阶）：
+The tree's advantage is full compatibility with lemon-family hosts and only one branch walked per tick. If you only need a **standalone datapack** and want to
+save the per-tick cost, you can schedule directly with `/schedule` after generation (**available only in 1.14+**; not automated in this repository, an advanced manual step):
 
 ```
-# play_sched.mcfunction（t 为该音符的游戏 tick）
+# play_sched.mcfunction (t is that note's game tick)
 schedule function minecraft:music/mysong/notes/12 12t
 schedule function minecraft:music/mysong/notes/15 15t
 ...
 ```
 
-- 优点：不需要 `tick.json`、不需要 `#speed`、每刻零开销，时间由引擎精确调度。
-- 缺点：几千条 `schedule` 一次性压进一个函数；`stop` 需要逐条 `schedule clear <函数>`；
-  与需要 `#speed` 的宿主不兼容。
-- 安全上限：单个 mcfunction 的命令数上限是 65536（1.20.2 起放宽），本工作流的曲目规模（千级）很安全。
+- Pros: no `tick.json`, no `#speed`, zero per-tick cost, and timing is scheduled precisely by the engine.
+- Cons: thousands of `schedule` commands pushed into one function at once; `stop` needs a line-by-line `schedule clear <function>`;
+  incompatible with hosts that need `#speed`.
+- Safety limit: the command limit of a single mcfunction is 65536 (relaxed in 1.20.2+), and this workflow's song sizes (thousands) are very safe.
 
-## 7. 没有 Python 环境：手工拼包
+## 7. No Python environment: assembling the pack by hand
 
-按 `templates/` 里的骨架拼：`pack.mcmeta` 二选一（看版本）、`init.mcfunction`、两个标签，
-再把 `generate.py` 的产物放进去。**三处必须自洽**（写法 / 目录名 / 标签路径），
-详见 `templates/README.md`。手工生成 mcfunction 的规则见 `references/format_spec.md` §A、§D。
+Assemble from the skeletons in `templates/`: choose one of the two `pack.mcmeta` variants (depending on the version), `init.mcfunction`, the two tags,
+then drop in the output of `generate.py`. **Three things must be consistent** (syntax / directory name / tag path);
+see `templates/README.md` for details. For the rules of generating mcfunctions by hand see `references/format_spec.md` §A, §D.
 
-## 8. 音频不是 MIDI 时
+## 8. When the audio is not MIDI
 
-本 skill 只吃 **MIDI / .nbs 工程 / 文字谱面**。只有 mp3 时，先自己转录成 MIDI（外部工具如
-basic-pitch、piano_transcription_inference），并且**如实告诉用户质量会下降**：
-纯钢琴独奏最好，人声/多乐器混音经常惨不忍睹。转录完先跑 `scan_midi.py` 看判定，
-音符破碎/声部混乱就该建议用户去找原生 MIDI，而不是硬做。
+This skill only eats **MIDI / .nbs projects / text scores**. With only an mp3, transcribe it to MIDI yourself first (external tools such as
+basic-pitch, piano_transcription_inference), and **honestly tell the user that quality will drop**:
+pure piano solos work best, while vocal or multi-instrument mixes are often painful. After transcribing, run `scan_midi.py` to see the verdict;
+if notes are fragmented or parts are chaotic, you should advise the user to find a native MIDI rather than forcing it.
 
-## 9. 交付清单（每次都过一遍）
+## 9. Delivery checklist (go through it every time)
 
 ```
-[ ] song.json（可复现的编曲输入）
-[ ] 编曲决策说明（midi_to_song.py --report 自动生成：声部映射/折叠/量化误差/抽查）
-[ ] 数据包目录或 zip（make_datapack.py 产出，pack.mcmeta 写法与目录名都已对版本）
-[ ] validate_pack.py 全绿（含"每个 notes 恰好被引用一次"+ 树状态机模拟）
-[ ] doctor.py 全 [OK]
-[ ] 试听 wav（render_preview.py，可选但推荐）
-[ ] 交付说明里写清：#speed 假设、是否用了 /tick rate、哪些音折了八度、验证到了哪一步
+[ ] song.json (a reproducible arrangement input)
+[ ] arrangement decision notes (midi_to_song.py --report generates them automatically: part mapping/folding/quantization error/spot checks)
+[ ] datapack directory or zip (produced by make_datapack.py, with pack.mcmeta syntax and directory names already matched to the version)
+[ ] validate_pack.py all green (including "every notes file referenced exactly once" + the tree state-machine simulation)
+[ ] doctor.py all [OK]
+[ ] preview wav (render_preview.py, optional but recommended)
+[ ] the delivery notes state clearly: the #speed assumption, whether /tick rate was used, which notes were octave-folded, and how far verification went
 ```

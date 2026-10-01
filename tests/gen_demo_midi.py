@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成 examples/demo.mid —— 8 小节 C 大调示例（120 BPM，主旋律+贝斯+鼓）。
+"""Generate examples/demo.mid — an 8-bar C-major example (120 BPM, lead melody + bass + drums).
 
-刻意包含两个"该被工具处理好"的细节：
-  * 第 4 小节有一个同 onset 的两音和弦（F4+A4）—— 去重只能按 (tick,乐器,音高)，不能吞掉和弦
-  * 第 4 小节军鼓有一个 48 MIDI tick 的 flam（= 1 个游戏 tick）—— 会产生相邻音符 tick，
-    正好踩在上游"2 格宽叶子吃掉第二个音符"的坑上，所以它也是 tests/smoke_test.py 的回归素材
+Deliberately contains two details that "the tools should handle well":
+  * bar 4 has a two-note chord on the same onset (F4+A4) — deduplication may only key on
+    (tick, instrument, pitch), it must not swallow the chord
+  * the bar-4 snare has a flam of 48 MIDI ticks (= 1 game tick) — this produces adjacent note
+    ticks, landing exactly in the upstream "2-cell-wide leaves eat the second note" pitfall, so it
+    is also the regression material for tests/smoke_test.py
 
     python3 tests/gen_demo_midi.py examples/demo.mid
-仅用标准库。
+Standard library only.
 """
 import os, struct, sys
 
 PPQ = 480
 BPM = 120
-Q = PPQ                      # 一个四分音符的 tick 数
+Q = PPQ                      # ticks in one quarter note
 
 
 def varlen(n):
@@ -48,12 +50,12 @@ def main():
     def off(tick, ch, pitch):
         return (tick, bytes([0x80 | ch, pitch, 0]))
 
-    # ---- 主旋律（C 大调，8 小节；含一个同 onset 和弦）----
+    # ---- lead melody (C major, 8 bars; includes one same-onset chord) ----
     mel = [(0, 60), (0.5, 62), (1, 64), (1.5, 65), (2, 67), (3, 67),
            (4, 69), (4.5, 67), (5, 65), (5.5, 64), (6, 62), (7, 60),
            (8, 64), (8.5, 64), (9, 67), (9.5, 67), (10, 72), (11, 71),
            (12, 69), (12.5, 67), (13, 65), (13.5, 64), (14, 62), (14.5, 64),
-           (15, 65), (15, 69),                       # ← 同 tick 两音和弦 F4+A4
+           (15, 65), (15, 69),                       # ← two-note chord F4+A4 on the same tick
            (16, 72), (17, 71), (18, 69), (19, 67),
            (20, 65), (21, 64), (22, 62), (23, 60),
            (24, 60), (24.5, 64), (25, 67), (25.5, 72), (26, 71), (27, 69),
@@ -61,12 +63,12 @@ def main():
     me = []
     for q, p in mel:
         me += [on(int(q * Q), 0, p), off(int(q * Q) + int(0.45 * Q), 0, p)]
-    # ---- 贝斯：每小节根音 ----
+    # ---- bass: root note in every bar ----
     bass = [(0, 36), (4, 36), (8, 41), (12, 41), (16, 43), (20, 43), (24, 36), (28, 36)]
     be = []
     for q, p in bass:
         be += [on(int(q * Q), 1, p, 100), off(int(q * Q) + int(3.8 * Q), 1, p)]
-    # ---- 鼓：底鼓 1/3 拍、军鼓 2/4 拍、踩镲八分；第 4 小节军鼓带 1 游戏 tick 的 flam ----
+    # ---- drums: kick on beats 1/3, snare on 2/4, eighth-note hi-hat; the bar-4 snare has a 1-game-tick flam ----
     de = []
     for bar in range(8):
         b = bar * 4 * Q
@@ -76,20 +78,20 @@ def main():
             de += [on(b + beat * Q, 9, 38, 100), off(b + beat * Q + 30, 9, 38)]
         for i in range(8):
             de += [on(b + i * Q // 2, 9, 42, 70), off(b + i * Q // 2 + 20, 9, 42)]
-    flam = 13 * Q                                  # 13 拍 + 48 tick(=1 游戏 tick) 的连击
+    flam = 13 * Q                                  # beat 13 + a 48-tick (= 1 game tick) double hit
     de += [on(flam, 9, 38, 100), off(flam + 20, 9, 38),
            on(flam + 48, 9, 38, 90), off(flam + 48 + 20, 9, 38)]
 
-    # ---- 组装 ----
+    # ---- assemble ----
     cond = [(0, b"\xff\x51\x03" + struct.pack(">I", int(60e6 / BPM))[1:]),
-            (0, b"\xff\x58\x04\x04\x02\x18\x08")]      # 4/4 拍号
+            (0, b"\xff\x58\x04\x04\x02\x18\x08")]      # 4/4 time signature
     data = (track(cond, "conductor") + track(me, "piano lead") +
             track(be, "electric bass") + track(de, "drums"))
     header = b"MThd" + struct.pack(">IHHH", 6, 1, 4, PPQ)
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "wb") as f:
         f.write(header + data)
-    print("%s  %d 字节  %d BPM  8 小节  旋律 %d 音 / 贝斯 %d 音 / 鼓 %d 次"
+    print("%s  %d bytes  %d BPM  8 bars  melody %d notes / bass %d notes / drums %d hits"
           % (out, os.path.getsize(out), BPM, len(mel), len(bass), len(de) // 2))
 
 
