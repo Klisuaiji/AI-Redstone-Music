@@ -1,0 +1,39 @@
+name: smoke-test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 全部脚本零依赖（只用标准库），所以不需要 pip install
+      - name: 端到端回归测试（生成 → 自检 → 打包 → 反例）
+        run: python tests/smoke_test.py
+
+      - name: 示例 MIDI 走一遍工具链
+        run: |
+          python scripts/scan_midi.py examples/demo.mid
+          python scripts/midi_to_song.py examples/demo.mid -o /tmp/demo.song.json \
+            --name demo --song-id 8 --mc-version 26.2
+          python scripts/make_datapack.py /tmp/demo.song.json -o /tmp/demo-pack --mc-version 26.2 --no-zip
+          python scripts/validate_pack.py --pack /tmp/demo-pack --namespace minecraft \
+            --song demo --song-id 8 --speed 80 --mc-version 26.2
+          python scripts/doctor.py --pack /tmp/demo-pack --mc-version 26.2 --song demo --song-id 8
+
+      - name: 1.21.8（legacy pack.mcmeta + function/ 目录）
+        run: |
+          python scripts/make_datapack.py /tmp/demo.song.json -o /tmp/demo-1218 --mc-version 1.21.8 --no-zip
+          python scripts/validate_pack.py --pack /tmp/demo-1218 --namespace minecraft \
+            --song demo --song-id 8 --speed 80 --mc-version 1.21.8

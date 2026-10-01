@@ -13,6 +13,11 @@
 """
 import argparse, collections, json, math, os, re, sys
 
+try:            # Windows 控制台默认 GBK：让非 GBK 字符降级为 ?，而不是直接抛异常
+    sys.stdout.reconfigure(errors="replace")
+except Exception:
+    pass
+
 # 乐器白名单：inst -> (use-count 基准 MIDI, 最低 MC 版本)
 INSTRUMENTS = {
     "harp": (54, "1.13"), "bass": (30, "1.13"), "basedrum": (54, "1.13"),
@@ -76,7 +81,7 @@ def locate(pack, ns, path, song):
         return pack, None                       # lemon 兼容模式：交付物就是歌曲文件夹
     for dp, dns, _ in os.walk(pack):
         if os.path.basename(dp) == song and "notes" in dns and "tree" in dns:
-            return dp, pack
+            return dp, None                      # 只在目录树里找到歌曲文件夹，不当作数据包根
     return None, None
 
 

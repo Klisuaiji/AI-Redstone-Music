@@ -1,0 +1,77 @@
+{
+ "_comment": "song.json 骨架 —— 照这个填，然后跑 scripts/generate.py（或 make_datapack.py）。字段说明见 references/format_spec.md §B；下划线开头的键是注释，会被忽略。",
+ "meta": {
+  "name": "mysong",
+  "_name": "歌名（英文小写，用于路径与文件名）",
+  "namespace": "minecraft",
+  "_namespace": "数据包命名空间；minecraft 最简单，也可用你自己的名字",
+  "path": "music/mysong",
+  "_path": "函数路径 → /function <namespace>:<path>/play。社区惯例是 music/<歌名>",
+  "song_id": 9,
+  "_song_id": "music_type 选曲编号。lemon 系宿主里不能与已有曲目冲突（lemon 原包占 8）",
+  "mc_version": "26.2",
+  "_mc_version": "目标 MC 版本：决定乐器白名单与 pack.mcmeta 写法。pling/bit/banjo 需 1.14+，trumpet 需 26.1+",
+  "style": "standalone",
+  "_style": "standalone = 自带 init/tick 标签可独立安装；lemon = 只出歌曲文件夹挂到已有宿主",
+  "time_unit": "nbs_s_units",
+  "_time_unit": "nbs_s_units 时 t 就是游戏 tick（1/20 秒）—— 唯一经过实测的时轴约定，推荐",
+  "speed": 80,
+  "_speed": "#speed nbs_s 的值。宿主每刻给 nbs_s 加这么多，树窗口 80×t；只有 80 时 t 才等于游戏 tick",
+  "auto_stop": true,
+  "_auto_stop": "true = 最后一个音符 tick 自动接 stop",
+  "next_song": null,
+  "_next_song": "可选接歌链，如 minecraft:music/other/play",
+  "mute_tag": "no_music",
+  "_mute_tag": "带这个标签的玩家听不到本曲"
+ },
+ "tracks": [
+  {
+   "name": "lead",
+   "_note": "主旋律轨：1 个 track 放 1 个声部，便于按用户要求整轨 include/exclude",
+   "include": true,
+   "instrument_default": "pling",
+   "notes": [
+    {"t": 0,  "midi": 72, "vol": 1.0},
+    {"t": 4,  "midi": 74, "vol": 1.0},
+    {"t": 8,  "midi": 76, "vol": 1.0},
+    {"t": 8,  "midi": 79, "vol": 1.0, "inst": "pling"},
+    {"t": 12, "midi": 77, "vol": 1.0},
+    {"_comment": "t = 音符起始（本约定下即游戏 tick，1=0.05s）；midi = 音高；vol 可省略默认 1.0；inst 可覆盖本轨默认乐器"},
+    {"_comment": "同 tick 同乐器的多个音 = 和弦，会被完整保留（去重只按 tick+乐器+音高）"}
+   ]
+  },
+  {
+   "name": "chord",
+   "include": true,
+   "instrument_default": "guitar",
+   "notes": [
+    {"t": 0,  "midi": 48},
+    {"t": 0,  "midi": 52},
+    {"t": 8,  "midi": 45},
+    {"t": 8,  "midi": 48},
+    {"_comment": "伴奏/和弦默认音量 1.0；超音域的音在生成时折八度并告警"}
+   ]
+  },
+  {
+   "name": "bass",
+   "include": true,
+   "instrument_default": "bass",
+   "notes": [
+    {"t": 0,  "midi": 36},
+    {"t": 8,  "midi": 41},
+    {"_comment": "bass 基准 F#1(30)，可及 30..54；更低的音必须升八度"}
+   ]
+  },
+  {
+   "name": "drums",
+   "include": true,
+   "instrument_default": "basedrum",
+   "notes": [
+    {"t": 0,  "midi": 54, "inst": "basedrum", "vol": 0.6},
+    {"t": 4,  "midi": 54, "inst": "hat",      "vol": 0.25},
+    {"t": 8,  "midi": 54, "inst": "snare",    "vol": 0.5},
+    {"_comment": "鼓的 midi 随意（用 54 = use-count 12 = pitch 1.0）；音量务必'宁小勿大'"}
+   ]
+  }
+ ]
+}
